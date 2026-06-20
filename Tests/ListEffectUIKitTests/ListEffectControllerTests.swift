@@ -1,0 +1,48 @@
+#if canImport(UIKit)
+import XCTest
+import UIKit
+import ListEffectCore
+@testable import ListEffectUIKit
+
+private final class FixedDataSource: NSObject, UITableViewDataSource {
+    func tableView(_ t: UITableView, numberOfRowsInSection s: Int) -> Int { 50 }
+    func tableView(_ t: UITableView, cellForRowAt i: IndexPath) -> UITableViewCell {
+        UITableViewCell(style: .default, reuseIdentifier: nil)
+    }
+}
+
+final class ListEffectControllerTests: XCTestCase {
+    private var ds: FixedDataSource!
+
+    private func makeTable() -> UITableView {
+        let tv = UITableView(frame: CGRect(x: 0, y: 0, width: 320, height: 480))
+        tv.rowHeight = 44
+        ds = FixedDataSource()
+        tv.dataSource = ds
+        tv.reloadData()
+        tv.layoutIfNeeded()
+        return tv
+    }
+
+    func testParallaxAppliesTransformOnAttach() {
+        let tv = makeTable()
+        tv.listEffect.attach(ParallaxEffect(amplitude: 24))
+
+        // 第 0 行：restingCenter.y=22，视口 midY=240，half=240 → position=(22-240)/240
+        let position = (22.0 - 240.0) / 240.0
+        let expected = CGFloat(position) * 24
+        let cell = tv.cellForRow(at: IndexPath(row: 0, section: 0))!
+        XCTAssertEqual(cell.transform.ty, expected, accuracy: 0.5)
+    }
+
+    func testDetachResetsTransform() {
+        let tv = makeTable()
+        tv.listEffect.attach(ParallaxEffect(amplitude: 24))
+        tv.listEffect.detach()
+
+        let cell = tv.cellForRow(at: IndexPath(row: 0, section: 0))!
+        XCTAssertEqual(cell.transform, .identity)
+        XCTAssertEqual(cell.alpha, 1, accuracy: 0.001)
+    }
+}
+#endif
