@@ -44,5 +44,28 @@ final class ListEffectControllerTests: XCTestCase {
         XCTAssertEqual(cell.transform, .identity)
         XCTAssertEqual(cell.alpha, 1, accuracy: 0.001)
     }
+
+    func testTrackingAppliesOffsetOnScroll() {
+        let tv = makeTable()
+        tv.listEffect.attach(SpringyEffect(stiffness: 2400))
+
+        // 触发一次小幅滚动：delta=10
+        tv.contentOffset = CGPoint(x: 0, y: 10)
+
+        // 第 0 行 center≈(160,22)，touch=.zero → resistance=(22+160)/2400≈0.0758
+        // dy = min(10, 10*0.0758) ≈ 0.758
+        let cell = tv.cellForRow(at: IndexPath(row: 0, section: 0))!
+        XCTAssertEqual(cell.transform.ty, 0.758, accuracy: 0.2)
+    }
+
+    func testTrackingDetachResets() {
+        let tv = makeTable()
+        tv.listEffect.attach(SpringyEffect())
+        tv.contentOffset = CGPoint(x: 0, y: 10)
+        tv.listEffect.detach()
+
+        let cell = tv.cellForRow(at: IndexPath(row: 0, section: 0))!
+        XCTAssertEqual(cell.transform, .identity)
+    }
 }
 #endif

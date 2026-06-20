@@ -14,6 +14,10 @@ public final class ListEffectController {
     private weak var host: ListEffectHost?
     var attached: Attached?
     private var offsetObservation: NSKeyValueObservation?
+    private var lastOffsetY: CGFloat = 0
+    private var accumulated: [ObjectIdentifier: CGFloat] = [:]
+    private var displayLink: CADisplayLink?
+    private let relaxation: CGFloat = 0.82
 
     init(host: ListEffectHost) {
         self.host = host
@@ -29,7 +33,11 @@ public final class ListEffectController {
     public func attach(_ effect: TrackingEffect) {
         reset()
         attached = .tracking(effect)
-        // KVO / 累加 / 归位在 Task 7 补全
+        lastOffsetY = host?.hostScrollView.contentOffset.y ?? 0
+        startObserving()
+        let link = CADisplayLink(target: self, selector: #selector(tick))
+        link.add(to: .main, forMode: .common)
+        displayLink = link
     }
 
     public func detach() {
@@ -48,8 +56,21 @@ public final class ListEffectController {
         switch attached {
         case .position:
             applyPosition()
-        case .tracking:
-            break   // Task 7
+        case .tracking(let effect):
+            guard let host = host else { return }
+            let sv = host.hostScrollView
+            let newY = sv.contentOffset.y
+            let delta = newY - lastOffsetY
+            lastOffsetY = newY
+            let touch = sv.panGestureRecognizer.location(in: sv)
+            for item in host.visibleItems() {
+                let out = effect.resolve(delta: delta,
+                                         itemCenter: item.restingCenter,
+                                         touch: touch,
+                                         container: sv.bounds.size)
+                accumulated[ObjectIdentifier(item.view), default: 0] += out.translation.y
+            }
+            applyTracking()
         }
     }
 
@@ -62,6 +83,29 @@ public final class ListEffectController {
             let position = half == 0 ? 0 : (item.restingCenter.y - midY) / half
             apply(effect.resolve(position: position), to: item.view)
         }
+    }
+
+    private func applyTracking() {
+        guard let host = host else { return }
+        for item in host.visibleItems() {
+            let y = accumulated[ObjectIdentifier(item.view)] ?? 0
+            apply(EffectOutput(translation: CGPoint(x: 0, y: y)), to: item.view)
+        }
+    }
+
+    @objc private func tick() {
+        guard case .tracking? = attached, let host = host else { return }
+        var changed = false
+        for item in host.visibleItems() {
+            let id = ObjectIdentifier(item.view)
+            var y = accumulated[id] ?? 0
+            guard y != 0 else { continue }
+            y *= relaxation
+            if abs(y) < 0.5 { y = 0 }
+            accumulated[id] = y
+            changed = true
+        }
+        if changed { applyTracking() }
     }
 
     func apply(_ out: EffectOutput, to view: UIView) {
@@ -81,6 +125,9 @@ public final class ListEffectController {
 
     func reset() {
         offsetObservation = nil
+        displayLink?.invalidate()
+        displayLink = nil
+        accumulated.removeAll()
         if let host = host {
             for item in host.visibleItems() {
                 item.view.transform = .identity
