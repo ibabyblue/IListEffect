@@ -18,7 +18,6 @@ final class SpringyCollectionViewController: UIViewController, UICollectionViewD
         // 更硬：提高频率（弹簧更紧、回弹更快）+ 提高阻尼（少晃）
         layout.springFrequency = 2.2
         layout.springDamping = 0.92
-        // 波浪更小：增大阻力分母，cell 跟手滞后更少
         layout.scrollResistanceFactor = 3000
 
         collectionView = UICollectionView(frame: view.bounds, collectionViewLayout: layout)
