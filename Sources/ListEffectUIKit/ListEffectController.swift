@@ -31,6 +31,8 @@ public final class ListEffectController {
     private var displayLink: CADisplayLink?
     private var displayLinkProxy: DisplayLinkProxy?
     private let relaxation: CGFloat = 0.82
+    /// 跟随位移上限（pt），防止快速滚动时偏移超过行高导致 cell 重叠。
+    private let maxLag: CGFloat = 24
 
     init(host: ListEffectHost) {
         self.host = host
@@ -87,17 +89,13 @@ public final class ListEffectController {
             for item in host.visibleItems() {
                 let id = ObjectIdentifier(item.view)
                 visibleIDs.insert(id)
-                // restingCenter 是内容坐标系，touch 是视图坐标系；必须换算到同一空间，
-                // 否则下滑后 itemCenter.y 远大于 touch.y，距离爆炸 → resistance≥1 → 整段滞后 → cell 重叠。
-                let centerInView = CGPoint(x: item.restingCenter.x,
-                                           y: item.restingCenter.y - newY)
                 let out = effect.resolve(delta: delta,
-                                         itemCenter: centerInView,
+                                         itemCenter: item.restingCenter,
                                          touch: touch,
                                          container: sv.bounds.size)
-                // 直接设为本帧目标滞后量（不累加），避免 1/(1-relaxation) 的放大；
-                // 停止滚动后由 tick 衰减回零。
-                accumulated[id] = out.translation.y
+                // 累加本帧滞后增量，但夹到 ±maxLag，避免位移超过行高导致 cell 重叠。
+                let x = (accumulated[id] ?? 0) + out.translation.y
+                accumulated[id] = max(-maxLag, min(maxLag, x))
             }
             // 丢弃已离屏 cell 的条目，复用的 cell 不会继承陈旧偏移。
             accumulated = accumulated.filter { visibleIDs.contains($0.key) }
