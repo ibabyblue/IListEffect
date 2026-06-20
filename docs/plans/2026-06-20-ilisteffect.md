@@ -17,6 +17,10 @@
 - UIKit 代码一律用 `#if canImport(UIKit)` 包裹（兼容包级 macOS 声明）
 - 库接管 cell 的 `transform` / `layer.transform` / `alpha`，文档需明示
 - 提交信息单行 subject，无 body，无 `Co-Authored-By`
+- **测试运行方式**：Core（Task 1–4）用 `swift test`。UIKit / SwiftUI（Task 5–8）的代码被 `#if canImport(UIKit/SwiftUI)` 包裹，在 macOS host 上 `swift test` 会把它们编译为空、测试不运行；这些 target 必须跑 iOS 模拟器：
+  `xcodebuild test -scheme IListEffect-Package -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:<TestTarget>/<TestClass>`
+  （注：声明多 target 后 SPM 的整包 scheme 名为 `IListEffect-Package`。）
+  （RED 步骤表现为编译失败而非断言失败。各 Task 步骤里写的 `swift test --filter ...` 对 UIKit/SwiftUI 一律以本命令为准。）
 
 ---
 
