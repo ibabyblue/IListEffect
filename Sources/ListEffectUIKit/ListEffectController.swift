@@ -2,6 +2,18 @@
 import UIKit
 import ListEffectCore
 
+/// Breaks the CADisplayLink -> target strong reference. The run loop retains
+/// the proxy, the proxy holds the controller weakly, so the controller is free
+/// to deinit once its scroll view releases it.
+private final class DisplayLinkProxy: NSObject {
+    weak var controller: ListEffectController?
+    init(controller: ListEffectController) {
+        self.controller = controller
+        super.init()
+    }
+    @objc func tick() { controller?.tick() }
+}
+
 /// 滚动动效驱动器。通过 KVO 监听 contentOffset，将效果输出写入可见 cell 的 transform。
 /// 不接管宿主的 delegate / dataSource。
 public final class ListEffectController {
@@ -17,10 +29,16 @@ public final class ListEffectController {
     private var lastOffsetY: CGFloat = 0
     private var accumulated: [ObjectIdentifier: CGFloat] = [:]
     private var displayLink: CADisplayLink?
+    private var displayLinkProxy: DisplayLinkProxy?
     private let relaxation: CGFloat = 0.82
 
     init(host: ListEffectHost) {
         self.host = host
+    }
+
+    deinit {
+        offsetObservation = nil
+        displayLink?.invalidate()
     }
 
     public func attach(_ effect: PositionEffect) {
@@ -35,8 +53,10 @@ public final class ListEffectController {
         attached = .tracking(effect)
         lastOffsetY = host?.hostScrollView.contentOffset.y ?? 0
         startObserving()
-        let link = CADisplayLink(target: self, selector: #selector(tick))
+        let proxy = DisplayLinkProxy(controller: self)
+        let link = CADisplayLink(target: proxy, selector: #selector(DisplayLinkProxy.tick))
         link.add(to: .main, forMode: .common)
+        displayLinkProxy = proxy
         displayLink = link
     }
 
@@ -93,7 +113,7 @@ public final class ListEffectController {
         }
     }
 
-    @objc private func tick() {
+    func tick() {
         guard case .tracking? = attached, let host = host else { return }
         var changed = false
         for item in host.visibleItems() {
@@ -127,6 +147,7 @@ public final class ListEffectController {
         offsetObservation = nil
         displayLink?.invalidate()
         displayLink = nil
+        displayLinkProxy = nil
         accumulated.removeAll()
         if let host = host {
             for item in host.visibleItems() {

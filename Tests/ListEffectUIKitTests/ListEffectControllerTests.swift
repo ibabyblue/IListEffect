@@ -67,5 +67,15 @@ final class ListEffectControllerTests: XCTestCase {
         let cell = tv.cellForRow(at: IndexPath(row: 0, section: 0))!
         XCTAssertEqual(cell.transform, .identity)
     }
+
+    func testControllerDeallocatesAfterScrollViewReleased() {
+        weak var weakController: ListEffectController?
+        autoreleasepool {
+            let tv = makeTable()
+            tv.listEffect.attach(SpringyEffect())
+            weakController = tv.listEffect
+        }
+        XCTAssertNil(weakController, "controller leaked — CADisplayLink retain cycle?")
+    }
 }
 #endif
