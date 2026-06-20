@@ -52,10 +52,10 @@ final class ListEffectControllerTests: XCTestCase {
         // 触发一次小幅滚动：delta=10
         tv.contentOffset = CGPoint(x: 0, y: 10)
 
-        // 第 0 行 center≈(160,22)，touch=.zero → resistance=(22+160)/2400≈0.0758
-        // dy = min(10, 10*0.0758) ≈ 0.758
+        // 第 0 行 restingCenter=(160,22)，换算到视图坐标 centerInView=(160, 22-10=12)；
+        // touch=.zero → resistance=(12+160)/2400≈0.0717；dy=min(10, 10*0.0717)≈0.717
         let cell = tv.cellForRow(at: IndexPath(row: 0, section: 0))!
-        XCTAssertEqual(cell.transform.ty, 0.758, accuracy: 0.2)
+        XCTAssertEqual(cell.transform.ty, 0.717, accuracy: 0.05)
     }
 
     func testTrackingDetachResets() {
@@ -66,6 +66,31 @@ final class ListEffectControllerTests: XCTestCase {
 
         let cell = tv.cellForRow(at: IndexPath(row: 0, section: 0))!
         XCTAssertEqual(cell.transform, .identity)
+    }
+
+    // 回归：下滑后 restingCenter（内容坐标）远超 touch（视图坐标），
+    // 修复前 resistance≥1 + 累加放大会让偏移达到约 60~90pt（> 行高 44）→ cell 重叠。
+    func testTrackingOffsetBoundedWhenScrolledDown() {
+        let tv = UITableView(frame: CGRect(x: 0, y: 0, width: 320, height: 480))
+        tv.rowHeight = 44
+        ds = FixedDataSource()           // 50 行，contentHeight≈2200
+        tv.dataSource = ds
+        tv.reloadData()
+        tv.contentOffset = CGPoint(x: 0, y: 1200)
+        tv.layoutIfNeeded()
+        tv.listEffect.attach(SpringyEffect())
+
+        var maxTy: CGFloat = 0
+        var y: CGFloat = 1200
+        for _ in 0..<20 {
+            y += 20
+            tv.contentOffset = CGPoint(x: 0, y: y)
+            tv.layoutIfNeeded()
+            tv.listEffect.tick()         // 模拟 displaylink 帧
+            for c in tv.visibleCells { maxTy = max(maxTy, abs(c.transform.ty)) }
+        }
+        _ = ds
+        XCTAssertLessThan(maxTy, 10, "下滑后 tracking 偏移必须有界，否则 cell 重叠")
     }
 
     func testControllerDeallocatesAfterScrollViewReleased() {
