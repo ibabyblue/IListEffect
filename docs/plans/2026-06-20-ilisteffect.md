@@ -82,19 +82,15 @@ let package = Package(
     platforms: [.iOS(.v15), .macOS(.v12)],
     products: [
         .library(name: "ListEffect-Core", targets: ["ListEffectCore"]),
-        .library(name: "ListEffect-UIKit", targets: ["ListEffectUIKit"]),
-        .library(name: "ListEffect-SwiftUI", targets: ["ListEffectSwiftUI"]),
     ],
     targets: [
         .target(name: "ListEffectCore"),
-        .target(name: "ListEffectUIKit", dependencies: ["ListEffectCore"]),
-        .target(name: "ListEffectSwiftUI", dependencies: ["ListEffectCore"]),
         .testTarget(name: "ListEffectCoreTests", dependencies: ["ListEffectCore"]),
-        .testTarget(name: "ListEffectUIKitTests", dependencies: ["ListEffectUIKit"]),
-        .testTarget(name: "ListEffectSwiftUITests", dependencies: ["ListEffectSwiftUI"]),
     ]
 )
 ```
+
+> **注（构建正确性）**：SPM 不允许 target 目录为空。`ListEffectUIKit` / `ListEffectSwiftUI` 的 target、product 与对应 test target **不在此处声明**，而是等到它们第一个源文件落地时再加入 Package.swift——UIKit 在 Task 5，SwiftUI 在 Task 8。如此每个 commit 都能独立构建，无需占位文件。
 
 - [ ] **Step 2: 写 EffectOutput.swift**
 
@@ -472,7 +468,31 @@ git commit -m "feat(core): add RevealEffect position effect"
   - `UITableView` / `UICollectionView` 均 conform `ListEffectHost`
   - `restingCenter` 为内容坐标系下的中心（与 contentOffset 无关）
 
-- [ ] **Step 1: 写失败测试**
+- [ ] **Step 1: 扩展 Package.swift，加入 UIKit target/product/test**
+
+本任务是 UIKit target 的第一个源文件，需先在 `Package.swift` 中声明该 target（Task 1 起 Package.swift 仅含 Core）。修改后的 `Package.swift`：
+
+```swift
+// swift-tools-version:5.10
+import PackageDescription
+
+let package = Package(
+    name: "IListEffect",
+    platforms: [.iOS(.v15), .macOS(.v12)],
+    products: [
+        .library(name: "ListEffect-Core", targets: ["ListEffectCore"]),
+        .library(name: "ListEffect-UIKit", targets: ["ListEffectUIKit"]),
+    ],
+    targets: [
+        .target(name: "ListEffectCore"),
+        .target(name: "ListEffectUIKit", dependencies: ["ListEffectCore"]),
+        .testTarget(name: "ListEffectCoreTests", dependencies: ["ListEffectCore"]),
+        .testTarget(name: "ListEffectUIKitTests", dependencies: ["ListEffectUIKit"]),
+    ]
+)
+```
+
+- [ ] **Step 2: 写失败测试**
 
 `Tests/ListEffectUIKitTests/ListEffectHostTests.swift`:
 
@@ -510,12 +530,12 @@ final class ListEffectHostTests: XCTestCase {
 #endif
 ```
 
-- [ ] **Step 2: 运行测试，确认失败**
+- [ ] **Step 3: 运行测试，确认失败**
 
 Run: `swift test --filter ListEffectHostTests`
 Expected: FAIL（`value of type 'UITableView' has no member 'visibleItems'`）
 
-- [ ] **Step 3: 写实现**
+- [ ] **Step 4: 写实现**
 
 `Sources/ListEffectUIKit/ListEffectHost.swift`:
 
@@ -556,15 +576,15 @@ extension UICollectionView: ListEffectHost {
 #endif
 ```
 
-- [ ] **Step 4: 运行测试，确认通过**
+- [ ] **Step 5: 运行测试，确认通过**
 
 Run: `swift test --filter ListEffectHostTests`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add Sources/ListEffectUIKit/ListEffectHost.swift Tests/ListEffectUIKitTests/ListEffectHostTests.swift
+git add Package.swift Sources/ListEffectUIKit/ListEffectHost.swift Tests/ListEffectUIKitTests/ListEffectHostTests.swift
 git commit -m "feat(uikit): add ListEffectHost with table/collection conformances"
 ```
 
@@ -940,7 +960,34 @@ git commit -m "feat(uikit): add tracking effect path with display-link settle-ba
 - Consumes: `PositionEffect` / `EffectOutput`（Core）
 - Produces: `View.listEffect(_ effect: PositionEffect) -> some View`，标注 `@available(iOS 17.0, macOS 14.0, *)`
 
-- [ ] **Step 1: 写 smoke 测试**
+- [ ] **Step 1: 扩展 Package.swift，加入 SwiftUI target/product/test**
+
+本任务是 SwiftUI target 的第一个源文件，需先在 `Package.swift` 中声明该 target（此前 Package.swift 含 Core + UIKit）。修改后的 `Package.swift`：
+
+```swift
+// swift-tools-version:5.10
+import PackageDescription
+
+let package = Package(
+    name: "IListEffect",
+    platforms: [.iOS(.v15), .macOS(.v12)],
+    products: [
+        .library(name: "ListEffect-Core", targets: ["ListEffectCore"]),
+        .library(name: "ListEffect-UIKit", targets: ["ListEffectUIKit"]),
+        .library(name: "ListEffect-SwiftUI", targets: ["ListEffectSwiftUI"]),
+    ],
+    targets: [
+        .target(name: "ListEffectCore"),
+        .target(name: "ListEffectUIKit", dependencies: ["ListEffectCore"]),
+        .target(name: "ListEffectSwiftUI", dependencies: ["ListEffectCore"]),
+        .testTarget(name: "ListEffectCoreTests", dependencies: ["ListEffectCore"]),
+        .testTarget(name: "ListEffectUIKitTests", dependencies: ["ListEffectUIKit"]),
+        .testTarget(name: "ListEffectSwiftUITests", dependencies: ["ListEffectSwiftUI"]),
+    ]
+)
+```
+
+- [ ] **Step 2: 写 smoke 测试**
 
 `Tests/ListEffectSwiftUITests/ListEffectModifierTests.swift`:
 
@@ -967,12 +1014,12 @@ final class ListEffectModifierTests: XCTestCase {
 
 注：该测试为 smoke 测试，无显式 `XCTAssert`——XCTest 中"运行过程不抛异常即通过"，目的仅是守住"加了 `listEffect` 的视图能编译并构造"这条编译/构建 gate。效果数值逻辑已由 Core 单测覆盖。
 
-- [ ] **Step 2: 运行测试，确认失败**
+- [ ] **Step 3: 运行测试，确认失败**
 
 Run: `swift test --filter ListEffectModifierTests`
 Expected: FAIL（`value of type 'Text' has no member 'listEffect'`）
 
-- [ ] **Step 3: 写实现**
+- [ ] **Step 4: 写实现**
 
 `Sources/ListEffectSwiftUI/View+ListEffect.swift`:
 
@@ -998,15 +1045,15 @@ public extension View {
 #endif
 ```
 
-- [ ] **Step 4: 运行测试，确认通过**
+- [ ] **Step 5: 运行测试，确认通过**
 
 Run: `swift test --filter ListEffectModifierTests`
 Expected: PASS（或在 <iOS17 环境下 SKIP）
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add Sources/ListEffectSwiftUI/View+ListEffect.swift Tests/ListEffectSwiftUITests/ListEffectModifierTests.swift
+git add Package.swift Sources/ListEffectSwiftUI/View+ListEffect.swift Tests/ListEffectSwiftUITests/ListEffectModifierTests.swift
 git commit -m "feat(swiftui): add listEffect modifier for position effects"
 ```
 
