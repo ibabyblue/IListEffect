@@ -15,6 +15,9 @@ final class SpringyCollectionViewController: UIViewController, UICollectionViewD
 
         let layout = SpringyCollectionLayout()
         layout.itemSize = CGSize(width: view.bounds.width - 32, height: 80)
+        // 更硬：提高频率（弹簧更紧、回弹更快）+ 提高阻尼（少晃）
+        layout.springFrequency = 2.2
+        layout.springDamping = 0.92
 
         collectionView = UICollectionView(frame: view.bounds, collectionViewLayout: layout)
         collectionView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
