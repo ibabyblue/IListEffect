@@ -10,8 +10,8 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         let tab = UITabBarController()
         let springy = UINavigationController(rootViewController: SpringyCollectionViewController())
         springy.tabBarItem = UITabBarItem(title: "Springy", image: UIImage(systemName: "wave.3.right"), tag: 0)
-        let collection = UINavigationController(rootViewController: CollectionDemoViewController())
-        collection.tabBarItem = UITabBarItem(title: "Parallax", image: UIImage(systemName: "square.grid.2x2"), tag: 1)
+        let collection = CollectionDemoViewController()
+        collection.tabBarItem = UITabBarItem(title: "Slide In", image: UIImage(systemName: "square.grid.2x2"), tag: 1)
         let swiftui = UIHostingController(rootView: SwiftUIDemoView())
         swiftui.tabBarItem = UITabBarItem(title: "SwiftUI", image: UIImage(systemName: "swift"), tag: 2)
         tab.viewControllers = [springy, collection, swiftui]

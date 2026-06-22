@@ -2,13 +2,14 @@ import UIKit
 import ListEffectUIKit
 import ListEffectCore
 
+/// Slide In：cell 首次出现时从右侧滑入，回滑不再动画。使用库的 ListEffectEntrance。
 final class CollectionDemoViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
     private var collectionView: UICollectionView!
     private let colors: [UIColor] = [.systemTeal, .systemPink, .systemIndigo, .systemYellow]
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "Parallax (Position)"
+        title = "Slide In"
         let layout = UICollectionViewFlowLayout()
         layout.minimumLineSpacing = 12
         collectionView = UICollectionView(frame: view.bounds, collectionViewLayout: layout)
@@ -18,7 +19,12 @@ final class CollectionDemoViewController: UIViewController, UICollectionViewData
         collectionView.delegate = self
         collectionView.register(UICollectionViewCell.self, forCellWithReuseIdentifier: "c")
         view.addSubview(collectionView)
-        collectionView.listEffect.attach(ParallaxEffect(amplitude: 24))
+        collectionView.entrance.attach(SlideInEffect())
+    }
+
+    func collectionView(_ cv: UICollectionView, willDisplay cell: UICollectionViewCell,
+                        forItemAt i: IndexPath) {
+        cv.entrance.handle(cell: cell, indexPath: i)
     }
 
     func collectionView(_ cv: UICollectionView, numberOfItemsInSection s: Int) -> Int { 50 }
