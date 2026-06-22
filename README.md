@@ -1,63 +1,63 @@
 # IListEffect
 
-为可滚动列表（UIKit `UITableView` / `UICollectionView` 与 SwiftUI）提供**与滚动关联的动画效果**的 Swift Package。
+A Swift Package providing **scroll-linked animation effects** for scrollable lists (UIKit `UITableView` / `UICollectionView` and SwiftUI).
 
-内置三套招牌效果：
-- 「弹性跟手」`SpringyCollectionLayout`：UIDynamics 真实弹簧，带惯性回弹（Collection 专属，手感最佳）
-- 「从右滑入」`SlideInEffect`：cell 首次出现时从右侧滑入到原位（Table / Collection 通用）
-- 「缩放揭示」`RevealEffect`：cell 进入视口时缩放 + 淡入（SwiftUI）
+Three headline effects ship out of the box:
+- **Springy follow** — `SpringyCollectionLayout`: real UIDynamics springs with inertial bounce (Collection-only, best feel).
+- **Slide-in** — `SlideInEffect`: cells slide in from the right on first appearance (Table / Collection).
+- **Reveal** — `RevealEffect`: cells scale + fade in as they enter the viewport (SwiftUI).
 
-## 特性
+## Features
 
-- 🎯 **双端**：UIKit 与 SwiftUI 各有适配层，核心效果数学完全共用
-- 🧩 **可扩展**：新增效果只需实现协议，适配层零改动
-- 🪶 **接入轻量**：不接管宿主的 `delegate` / `dataSource`
+- 🎯 **Cross-platform**: separate adapters for UIKit and SwiftUI, sharing the same core effect math.
+- 🧩 **Extensible**: add an effect by conforming to a protocol — no adapter changes required.
+- 🪶 **Lightweight integration**: never takes over the host's `delegate` / `dataSource`.
 
-## 环境要求
+## Requirements
 
 - Swift 5.10+
 - iOS 15+ / macOS 12+
-- SwiftUI 的滚动效果需 iOS 17+ / macOS 14+（基于 `.scrollTransition`）
+- SwiftUI scroll effects require iOS 17+ / macOS 14+ (built on `.scrollTransition`).
 
-## 安装（Swift Package Manager）
+## Installation (Swift Package Manager)
 
-`Package.swift`：
+In `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/ibabyblue/IListEffect.git", from: "0.1.0")
+    .package(url: "https://github.com/ibabyblue/IListEffect.git", from: "0.2.0")
 ]
 ```
 
-或在 Xcode：**File → Add Package Dependencies…** 输入仓库地址。
+Or in Xcode: **File → Add Package Dependencies…** and enter the repository URL.
 
-三个产品按需依赖：
+Depend on whichever products you need:
 
-| Product | 模块 | 用途 |
+| Product | Module | Purpose |
 |---------|------|------|
-| `ListEffect-Core` | `ListEffectCore` | 纯效果逻辑（零 UI 依赖） |
-| `ListEffect-UIKit` | `ListEffectUIKit` | UIKit 适配（依赖 Core） |
-| `ListEffect-SwiftUI` | `ListEffectSwiftUI` | SwiftUI 适配（依赖 Core） |
+| `ListEffect-Core` | `ListEffectCore` | Pure effect logic (no UI dependencies) |
+| `ListEffect-UIKit` | `ListEffectUIKit` | UIKit adapter (depends on Core) |
+| `ListEffect-SwiftUI` | `ListEffectSwiftUI` | SwiftUI adapter (depends on Core) |
 
-## 用法
+## Usage
 
-### UIKit · 弹性跟手（UIDynamics 真弹簧）
+### UIKit · Springy follow (real UIDynamics springs)
 
-`SpringyCollectionLayout` 仅适用于 `UICollectionView`，手感最佳：
+`SpringyCollectionLayout` is `UICollectionView`-only and offers the best feel:
 
 ```swift
 import ListEffectUIKit
 
 let layout = SpringyCollectionLayout()
-layout.springFrequency = 2.2        // 硬度：越大越紧
-layout.springDamping = 0.92         // 阻尼：越大越少晃
-layout.scrollResistanceFactor = 3000 // 波浪幅度：越大滞后越小
+layout.springFrequency = 2.2         // stiffness: higher = tighter
+layout.springDamping = 0.92          // damping: higher = less wobble
+layout.scrollResistanceFactor = 3000 // wave amplitude: higher = less lag
 let collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
 ```
 
-### UIKit · 入场滑入（Table + Collection）
+### UIKit · Slide-in entrance (Table + Collection)
 
-cell 首次出现时从右侧滑入；回滑再次出现不动画。通过 `entrance` 入口挂载，在 `cellForItemAt` 预置初始态、`willDisplay` 触发动画：
+Cells slide in from the right on first appearance; scrolling back over already-shown cells does not re-animate. Mount via the `entrance` entry, preset the initial state in `cellForItemAt`, and trigger the animation in `willDisplay`:
 
 ```swift
 import ListEffectUIKit
@@ -68,15 +68,15 @@ tableView.entrance.attach(SlideInEffect())
 
 func tableView(_ tv: UITableView, cellForRowAt i: IndexPath) -> UITableViewCell {
     let cell = tv.dequeueReusableCell(...)
-    tv.entrance.prepare(cell: cell)          // cell 创建/复用即预置初始态，防快速滚动跳变
+    tv.entrance.prepare(cell: cell)          // preset initial state on create/reuse; avoids flicker on fast scroll
     return cell
 }
 
 func tableView(_ tv: UITableView, willDisplay cell: UITableViewCell, forRowAt i: IndexPath) {
-    tv.entrance.handle(cell: cell, indexPath: i)   // 滚动进入的新 cell 立即滑入（delay=0）
+    tv.entrance.handle(cell: cell, indexPath: i)   // newly scrolled-in cells slide in immediately (delay=0)
 }
 
-// 首批：viewDidAppear 批量触发，按行从上到下依次错开
+// Initial batch: trigger in viewDidAppear, staggered top-to-bottom by row
 override func viewDidAppear(_ animated: Bool) {
     super.viewDidAppear(animated)
     for cell in tableView.visibleCells.sorted(by: { ... }) {
@@ -87,11 +87,11 @@ override func viewDidAppear(_ animated: Bool) {
 }
 ```
 
-> ⚠️ 入场动画会接管 cell 的 `contentView.transform` / `alpha`，请勿同时对同一 cell 施加自定义 transform。
+> ⚠️ The entrance animation takes over the cell's `contentView.transform` / `alpha`. Do not apply a custom transform to the same cell concurrently.
 
-### SwiftUI（iOS 17+）
+### SwiftUI (iOS 17+)
 
-逐 row 加修饰符，仅接受位置型效果：
+Apply the modifier per row; it only accepts position-based effects:
 
 ```swift
 import SwiftUI
@@ -108,31 +108,31 @@ ScrollView {
 }
 ```
 
-## 内置效果与支持矩阵
+## Built-in effects and support matrix
 
-| 效果 | 路径 | UIKit | SwiftUI | 说明 |
+| Effect | Path | UIKit | SwiftUI | Notes |
 |------|------|:---:|:---:|------|
-| `SpringyCollectionLayout` | Layout | ✅ Collection | — | UIDynamics 真弹簧，带惯性回弹 |
-| `SlideInEffect` | Entrance | ✅ Table / Collection | — | 首次出现从右滑入；回滑不动画 |
-| `RevealEffect` | Position | — | ✅ | 进入视口时缩放 + 淡入 |
+| `SpringyCollectionLayout` | Layout | ✅ Collection | — | Real UIDynamics springs with inertial bounce |
+| `SlideInEffect` | Entrance | ✅ Table / Collection | — | Slides in from the right on first appearance; no re-animate on scroll-back |
+| `RevealEffect` | Position | — | ✅ | Scale + fade in as cells enter the viewport |
 
-`SlideInEffect` 实现 `EntranceEffect` 协议（UIKit 入场驱动 `ListEffectEntrance`）；`RevealEffect` 实现 `PositionEffect` 协议（SwiftUI `.listEffect` 基于 `.scrollTransition`，位置驱动）。
+`SlideInEffect` conforms to the `EntranceEffect` protocol (driven by the UIKit `ListEffectEntrance` driver); `RevealEffect` conforms to the `PositionEffect` protocol (SwiftUI's `.listEffect` is built on `.scrollTransition`, which is position-driven).
 
-## 扩展自定义效果
+## Custom effects
 
-实现对应协议即可，适配层无需改动：
+Conform to the relevant protocol — no adapter changes needed:
 
 ```swift
 import ListEffectCore
 
-// SwiftUI 位置型：实现 PositionEffect，配合 .listEffect 使用
+// SwiftUI position-based: conform to PositionEffect and use with .listEffect
 struct FadeEdgesEffect: PositionEffect {
     func resolve(position: CGFloat) -> EffectOutput {
         EffectOutput(alpha: 1 - min(1, abs(position)))
     }
 }
 
-// UIKit 入场型：实现 EntranceEffect，配合 ListEffectEntrance 使用
+// UIKit entrance: conform to EntranceEffect and use with ListEffectEntrance
 struct FadeInEffect: EntranceEffect {
     var duration: TimeInterval { 0.4 }
     func resolve(progress: CGFloat) -> EffectOutput {
@@ -141,18 +141,18 @@ struct FadeInEffect: EntranceEffect {
 }
 ```
 
-`PositionEffect` 的 `position` 为归一化视口位置（-1 顶部外 … 0 居中 … 1 底部外）；`EntranceEffect` 的 `progress` 为入场进度（0 初始 … 1 归位）。
+For `PositionEffect`, `position` is the normalized in-viewport position (-1 top outside … 0 centered … 1 bottom outside). For `EntranceEffect`, `progress` is the entrance progress (0 initial … 1 settled).
 
-## 架构
+## Architecture
 
 ```
-ListEffectCore     纯效果逻辑（EffectOutput / PositionEffect / EntranceEffect / 内置效果），零 UI 依赖
-ListEffectUIKit    SpringyCollectionLayout（UIDynamics）+ ListEffectEntrance（入场驱动，UIView.animate）
-ListEffectSwiftUI  基于 .scrollTransition 的 ViewModifier（iOS 17+）
+ListEffectCore     Pure effect logic (EffectOutput / PositionEffect / EntranceEffect / built-in effects), no UI dependencies
+ListEffectUIKit    SpringyCollectionLayout (UIDynamics) + ListEffectEntrance (entrance driver, UIView.animate)
+ListEffectSwiftUI  ViewModifier built on .scrollTransition (iOS 17+)
 ```
 
-效果的「数学」与「宿主控件」解耦：`SlideInEffect` / `RevealEffect` 等是纯函数（`resolve`），由各自平台的驱动器调用。
+Effect **math** is decoupled from the **host control**: `SlideInEffect` / `RevealEffect` are pure functions (`resolve`) invoked by each platform's driver.
 
-## 许可
+## License
 
 MIT
