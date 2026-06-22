@@ -52,7 +52,7 @@ public final class ListEffectEntrance {
 
     private func prepare(contentView: UIView) {
         guard let effect = effect else { return }
-        apply(effect.resolve(progress: 0), to: contentView)
+        applyEffectOutput(effect.resolve(progress: 0), to: contentView)
     }
 
     private func handle(contentView: UIView, indexPath: IndexPath, delay: TimeInterval) {
@@ -71,7 +71,7 @@ public final class ListEffectEntrance {
 
         let initial = effect.resolve(progress: 0)
         let final = effect.resolve(progress: 1)
-        apply(initial, to: contentView)
+        applyEffectOutput(initial, to: contentView)
         animating[id] = contentView
 
         let duration = effect.duration
@@ -79,27 +79,11 @@ public final class ListEffectEntrance {
                        delay: delay,
                        usingSpringWithDamping: 0.85,
                        initialSpringVelocity: 0.5,
-                       options: [.curveEaseOut]) { [weak self] in
-            self?.apply(final, to: contentView)
+                       options: [.curveEaseOut]) {
+            applyEffectOutput(final, to: contentView)
         } completion: { [weak self] _ in
             self?.animating.removeValue(forKey: id)
         }
-    }
-
-    private func apply(_ out: EffectOutput, to view: UIView) {
-        if out.rotation == 0 {
-            view.transform = CGAffineTransform(translationX: out.translation.x, y: out.translation.y)
-                .scaledBy(x: out.scale, y: out.scale)
-        } else {
-            view.transform = .identity
-            var t = CATransform3DIdentity
-            t.m34 = -1.0 / 800
-            t = CATransform3DTranslate(t, out.translation.x, out.translation.y, 0)
-            t = CATransform3DScale(t, out.scale, out.scale, 1)
-            t = CATransform3DRotate(t, out.rotation, 1, 0, 0)
-            view.layer.transform = t
-        }
-        view.alpha = out.alpha
     }
 }
 

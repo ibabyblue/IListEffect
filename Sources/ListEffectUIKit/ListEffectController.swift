@@ -110,7 +110,7 @@ public final class ListEffectController {
         let half = sv.bounds.height / 2
         for item in host.visibleItems() {
             let position = half == 0 ? 0 : (item.restingCenter.y - midY) / half
-            apply(effect.resolve(position: position), to: item.view)
+            applyEffectOutput(effect.resolve(position: position), to: item.view)
         }
     }
 
@@ -118,7 +118,7 @@ public final class ListEffectController {
         guard let host = host else { return }
         for item in host.visibleItems() {
             let y = accumulated[ObjectIdentifier(item.view)] ?? 0
-            apply(EffectOutput(translation: CGPoint(x: 0, y: y)), to: item.view)
+            applyEffectOutput(EffectOutput(translation: CGPoint(x: 0, y: y)), to: item.view)
         }
     }
 
@@ -135,24 +135,6 @@ public final class ListEffectController {
             changed = true
         }
         if changed { applyTracking() }
-    }
-
-    func apply(_ out: EffectOutput, to view: UIView) {
-        if out.rotation == 0 {
-            // 仿射通道：给 view.transform 赋值会同时归一化 layer.transform
-            view.transform = CGAffineTransform(translationX: out.translation.x, y: out.translation.y)
-                .scaledBy(x: out.scale, y: out.scale)
-        } else {
-            // 3D 通道：先清掉仿射状态，避免两条通道叠加
-            view.transform = .identity
-            var t = CATransform3DIdentity
-            t.m34 = -1.0 / 800
-            t = CATransform3DTranslate(t, out.translation.x, out.translation.y, 0)
-            t = CATransform3DScale(t, out.scale, out.scale, 1)
-            t = CATransform3DRotate(t, out.rotation, 1, 0, 0)
-            view.layer.transform = t
-        }
-        view.alpha = out.alpha
     }
 
     func reset() {
