@@ -2,123 +2,88 @@
 import UIKit
 import ListEffectCore
 
-private final class EntranceDisplayLinkProxy: NSObject {
-    weak var entrance: ListEffectEntrance?
-    init(entrance: ListEffectEntrance) {
-        self.entrance = entrance
-        super.init()
-    }
-    @objc func tick() { entrance?.tick() }
-}
-
 /// 入场驱动器：在 willDisplay 时调用 handle，对 cell.contentView 做一次性入场动画。
 /// 首次出现做动画；回滑再次出现直接归位，不动画。
 public final class ListEffectEntrance {
-    /// 相邻行错开延迟（秒），首批入场时从上到下依次。
+    /// 相邻行错开延迟（秒），首批入场时从上到下依次。由调用方在 handle(delay:) 传入。
     public var perRowDelay: TimeInterval = 0.05
-    /// 同批内错开上限，防止大列表延迟爆炸。
+    /// 行索引参与延迟计算的上限，防止大列表延迟爆炸。
     public var delayRowCap: Int = 12
 
     var effect: EntranceEffect?
     var displayedIndexPaths = Set<IndexPath>()
-    struct AnimState {
-        let contentView: UIView
-        let start: CFTimeInterval
-        let delay: TimeInterval
-    }
-    var animating: [ObjectIdentifier: AnimState] = [:]
-    var lastHandleTime: CFTimeInterval = 0
-    var batchIndex: Int = 0
-    let batchInterval: CFTimeInterval = 0.05
-    private var displayLink: CADisplayLink?
-    private var proxy: EntranceDisplayLinkProxy?
+    /// 正在动画的 contentView，用于 detach 还原。
+    var animating: [ObjectIdentifier: UIView] = [:]
 
     public init() {}
-
-    deinit {
-        // entrance 由 associated object 释放时，displayLink 可能仍挂在 runloop 上；
-        // 不 invalidate 会导致 link + proxy 永久泄漏（proxy.entrance 弱引用失效后 tick 变 no-op，无法自查清场）。
-        displayLink?.invalidate()
-    }
 
     public func attach(_ effect: EntranceEffect) {
         self.effect = effect
     }
 
     public func detach() {
-        displayLink?.invalidate()
-        displayLink = nil
-        proxy = nil
-        for state in animating.values {
-            state.contentView.transform = .identity
-            state.contentView.layer.transform = CATransform3DIdentity
-            state.contentView.alpha = 1
+        for contentView in animating.values {
+            contentView.transform = .identity
+            contentView.layer.transform = CATransform3DIdentity
+            contentView.alpha = 1
         }
         animating.removeAll()
         displayedIndexPaths.removeAll()
-        batchIndex = 0
     }
 
-    public func handle(cell: UITableViewCell, indexPath: IndexPath) {
-        handle(contentView: cell.contentView, indexPath: indexPath)
+    public func handle(cell: UITableViewCell, indexPath: IndexPath, delay: TimeInterval = 0) {
+        handle(contentView: cell.contentView, indexPath: indexPath, delay: delay)
     }
 
-    public func handle(cell: UICollectionViewCell, indexPath: IndexPath) {
-        handle(contentView: cell.contentView, indexPath: indexPath)
+    public func handle(cell: UICollectionViewCell, indexPath: IndexPath, delay: TimeInterval = 0) {
+        handle(contentView: cell.contentView, indexPath: indexPath, delay: delay)
     }
 
-    private func handle(contentView: UIView, indexPath: IndexPath) {
+    /// 在 cellForItemAt 调用，把 cell 预置为入场初始态。
+    /// cell 创建/复用时就处于初始态，避免 willDisplay 时 handle 从原位跳到初始态的闪烁
+    /// （快速滚动时 willDisplay 可能拖到视口内才触发，跳变可见）。
+    public func prepare(cell: UITableViewCell) {
+        prepare(contentView: cell.contentView)
+    }
+
+    public func prepare(cell: UICollectionViewCell) {
+        prepare(contentView: cell.contentView)
+    }
+
+    private func prepare(contentView: UIView) {
+        guard let effect = effect else { return }
+        apply(effect.resolve(progress: 0), to: contentView)
+    }
+
+    private func handle(contentView: UIView, indexPath: IndexPath, delay: TimeInterval) {
         guard let effect = effect else { return }
         let id = ObjectIdentifier(contentView)
         if displayedIndexPaths.contains(indexPath) {
             // 回滑：已显示过，移除残留动画，直接归位
             animating.removeValue(forKey: id)
             contentView.transform = .identity
+            contentView.layer.transform = CATransform3DIdentity
             contentView.alpha = 1
             return
         }
         displayedIndexPaths.insert(indexPath)
         animating.removeValue(forKey: id)  // cell 复用：清除旧条目
-        apply(effect.resolve(progress: 0), to: contentView)
 
-        let now = CACurrentMediaTime()
-        if now - lastHandleTime < batchInterval {
-            batchIndex += 1
-        } else {
-            batchIndex = 0
-        }
-        lastHandleTime = now
-        let delay = TimeInterval(min(batchIndex, delayRowCap)) * perRowDelay
-        animating[id] = AnimState(contentView: contentView, start: now, delay: delay)
-        startDisplayLinkIfNeeded()
-    }
+        let initial = effect.resolve(progress: 0)
+        let final = effect.resolve(progress: 1)
+        apply(initial, to: contentView)
+        animating[id] = contentView
 
-    func tick() {
-        guard let effect = effect, effect.duration > 0 else { return }
-        let now = CACurrentMediaTime()
-        var done: [ObjectIdentifier] = []
-        for (id, state) in animating {
-            let elapsed = now - state.start - state.delay
-            if elapsed < 0 { continue }
-            let progress = min(1, elapsed / effect.duration)
-            apply(effect.resolve(progress: progress), to: state.contentView)
-            if progress >= 1 { done.append(id) }
+        let duration = effect.duration
+        UIView.animate(withDuration: duration,
+                       delay: delay,
+                       usingSpringWithDamping: 0.85,
+                       initialSpringVelocity: 0.5,
+                       options: [.curveEaseOut]) { [weak self] in
+            self?.apply(final, to: contentView)
+        } completion: { [weak self] _ in
+            self?.animating.removeValue(forKey: id)
         }
-        for id in done { animating.removeValue(forKey: id) }
-        if animating.isEmpty {
-            displayLink?.invalidate()
-            displayLink = nil
-            proxy = nil
-        }
-    }
-
-    private func startDisplayLinkIfNeeded() {
-        guard displayLink == nil else { return }
-        let p = EntranceDisplayLinkProxy(entrance: self)
-        let link = CADisplayLink(target: p, selector: #selector(EntranceDisplayLinkProxy.tick))
-        link.add(to: .main, forMode: .common)
-        proxy = p
-        displayLink = link
     }
 
     private func apply(_ out: EffectOutput, to view: UIView) {
