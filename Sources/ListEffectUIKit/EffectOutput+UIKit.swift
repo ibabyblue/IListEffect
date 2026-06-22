@@ -3,7 +3,7 @@ import UIKit
 import ListEffectCore
 
 /// 把 EffectOutput 应用到 UIView：仿射通道写 view.transform，3D 通道写 layer.transform，alpha 单独写。
-/// ListEffectController（位置/跟随效果）与 ListEffectEntrance（入场效果）共用，避免两处逻辑漂移。
+/// ListEffectEntrance（入场效果）使用。
 func applyEffectOutput(_ out: EffectOutput, to view: UIView) {
     if out.rotation == 0 {
         // 仿射通道：给 view.transform 赋值会同时归一化 layer.transform

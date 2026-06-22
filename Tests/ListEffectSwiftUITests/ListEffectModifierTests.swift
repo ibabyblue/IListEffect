@@ -11,7 +11,7 @@ final class ListEffectModifierTests: XCTestCase {
         }
         // smoke：构造加了 modifier 的视图不应崩溃/编译失败；真实视觉靠 demo 目测。
         // 用 AnyView 强制对视图求值一次，确保 body 能被构造。
-        let wrapped = AnyView(Text("row").listEffect(ParallaxEffect(amplitude: 20)))
+        let wrapped = AnyView(Text("row").listEffect(RevealEffect(minScale: 0.8)))
         _ = wrapped
     }
 }

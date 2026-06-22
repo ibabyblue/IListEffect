@@ -2,15 +2,16 @@
 
 为可滚动列表（UIKit `UITableView` / `UICollectionView` 与 SwiftUI）提供**与滚动关联的动画效果**的 Swift Package。
 
-首发招牌效果是「弹性跟手」（UIDynamics 真实弹簧，带惯性回弹），并通过双协议设计为后续扩展更多滚动动效留好口子。
+内置三套招牌效果：
+- 「弹性跟手」`SpringyCollectionLayout`：UIDynamics 真实弹簧，带惯性回弹（Collection 专属，手感最佳）
+- 「从右滑入」`SlideInEffect`：cell 首次出现时从右侧滑入到原位（Table / Collection 通用）
+- 「缩放揭示」`RevealEffect`：cell 进入视口时缩放 + 淡入（SwiftUI）
 
 ## 特性
 
 - 🎯 **双端**：UIKit 与 SwiftUI 各有适配层，核心效果数学完全共用
 - 🧩 **可扩展**：新增效果只需实现协议，适配层零改动
-- 🔒 **类型安全的能力边界**：能否在 SwiftUI 使用由协议归属在编译期强制
-- 🪶 **接入轻量**：UIKit 一行接入，不接管宿主的 `delegate` / `dataSource`
-- 🌊 **两套弹性**：UIDynamics 真弹簧（Collection 专属）+ transform 通用近似（Table+Collection）
+- 🪶 **接入轻量**：不接管宿主的 `delegate` / `dataSource`
 
 ## 环境要求
 
@@ -40,7 +41,7 @@ dependencies: [
 
 ## 用法
 
-### UIKit · 弹性跟手（推荐，UIDynamics 真弹簧）
+### UIKit · 弹性跟手（UIDynamics 真弹簧）
 
 `SpringyCollectionLayout` 仅适用于 `UICollectionView`，手感最佳：
 
@@ -54,21 +55,39 @@ layout.scrollResistanceFactor = 3000 // 波浪幅度：越大滞后越小
 let collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
 ```
 
-### UIKit · 通用效果（Table + Collection）
+### UIKit · 入场滑入（Table + Collection）
 
-在 `UITableView` / `UICollectionView` 上一行接入，库自持有，不抢 delegate：
+cell 首次出现时从右侧滑入；回滑再次出现不动画。通过 `entrance` 入口挂载，在 `cellForItemAt` 预置初始态、`willDisplay` 触发动画：
 
 ```swift
 import ListEffectUIKit
 import ListEffectCore
 
-tableView.listEffect.attach(ParallaxEffect(amplitude: 24))      // UITableView
-collectionView.listEffect.attach(SpringyEffect(stiffness: 2400)) // UICollectionView，写法一致
-// 移除并复位
-tableView.listEffect.detach()
+// viewDidLoad
+tableView.entrance.attach(SlideInEffect())
+
+func tableView(_ tv: UITableView, cellForRowAt i: IndexPath) -> UITableViewCell {
+    let cell = tv.dequeueReusableCell(...)
+    tv.entrance.prepare(cell: cell)          // cell 创建/复用即预置初始态，防快速滚动跳变
+    return cell
+}
+
+func tableView(_ tv: UITableView, willDisplay cell: UITableViewCell, forRowAt i: IndexPath) {
+    tv.entrance.handle(cell: cell, indexPath: i)   // 滚动进入的新 cell 立即滑入（delay=0）
+}
+
+// 首批：viewDidAppear 批量触发，按行从上到下依次错开
+override func viewDidAppear(_ animated: Bool) {
+    super.viewDidAppear(animated)
+    for cell in tableView.visibleCells.sorted(by: { ... }) {
+        guard let i = tableView.indexPath(for: cell) else { continue }
+        let delay = TimeInterval(min(i.row, tableView.entrance.delayRowCap)) * tableView.entrance.perRowDelay
+        tableView.entrance.handle(cell: cell, indexPath: i, delay: delay)
+    }
+}
 ```
 
-> ⚠️ 本库会接管可见 cell 的 `transform` / `layer.transform` / `alpha`，请勿同时对同一 cell 施加自定义 transform。
+> ⚠️ 入场动画会接管 cell 的 `contentView.transform` / `alpha`，请勿同时对同一 cell 施加自定义 transform。
 
 ### SwiftUI（iOS 17+）
 
@@ -91,14 +110,13 @@ ScrollView {
 
 ## 内置效果与支持矩阵
 
-| 效果 | 协议 | UIKit | SwiftUI | 说明 |
+| 效果 | 路径 | UIKit | SwiftUI | 说明 |
 |------|------|:---:|:---:|------|
-| `SpringyCollectionLayout` | （Layout） | ✅ Collection | — | UIDynamics 真弹簧，手感最佳 |
-| `SpringyEffect` | `TrackingEffect` | ✅ | ❌ | transform 通用弹性近似（带位移上限防重叠） |
-| `ParallaxEffect` | `PositionEffect` | ✅ | ✅ | 视差位移 |
-| `RevealEffect` | `PositionEffect` | ✅ | ✅ | 进入视口时缩放 + 淡入 |
+| `SpringyCollectionLayout` | Layout | ✅ Collection | — | UIDynamics 真弹簧，带惯性回弹 |
+| `SlideInEffect` | Entrance | ✅ Table / Collection | — | 首次出现从右滑入；回滑不动画 |
+| `RevealEffect` | Position | — | ✅ | 进入视口时缩放 + 淡入 |
 
-矩阵中的 ❌ 由类型系统强制：`TrackingEffect` 依赖触摸与每帧位移，SwiftUI 的 `.scrollTransition` 是位置驱动、拿不到这些量，故 `listEffect(_:)` 只接受 `PositionEffect`。
+`SlideInEffect` 实现 `EntranceEffect` 协议（UIKit 入场驱动 `ListEffectEntrance`）；`RevealEffect` 实现 `PositionEffect` 协议（SwiftUI `.listEffect` 基于 `.scrollTransition`，位置驱动）。
 
 ## 扩展自定义效果
 
@@ -107,25 +125,33 @@ ScrollView {
 ```swift
 import ListEffectCore
 
-// 位置型（双端可用）
+// SwiftUI 位置型：实现 PositionEffect，配合 .listEffect 使用
 struct FadeEdgesEffect: PositionEffect {
     func resolve(position: CGFloat) -> EffectOutput {
         EffectOutput(alpha: 1 - min(1, abs(position)))
     }
 }
+
+// UIKit 入场型：实现 EntranceEffect，配合 ListEffectEntrance 使用
+struct FadeInEffect: EntranceEffect {
+    var duration: TimeInterval { 0.4 }
+    func resolve(progress: CGFloat) -> EffectOutput {
+        EffectOutput(alpha: progress)
+    }
+}
 ```
 
-`PositionEffect` 的 `position` 为归一化位置（-1 顶部外 … 0 居中 … 1 底部外）。
+`PositionEffect` 的 `position` 为归一化视口位置（-1 顶部外 … 0 居中 … 1 底部外）；`EntranceEffect` 的 `progress` 为入场进度（0 初始 … 1 归位）。
 
 ## 架构
 
 ```
-ListEffectCore     纯效果传递函数（EffectOutput / PositionEffect / TrackingEffect / 内置效果），零 UI 依赖
-ListEffectUIKit    UIScrollView + KVO + cell transform 驱动（覆盖 Table/Collection）；UIDynamics SpringyCollectionLayout
+ListEffectCore     纯效果逻辑（EffectOutput / PositionEffect / EntranceEffect / 内置效果），零 UI 依赖
+ListEffectUIKit    SpringyCollectionLayout（UIDynamics）+ ListEffectEntrance（入场驱动，UIView.animate）
 ListEffectSwiftUI  基于 .scrollTransition 的 ViewModifier（iOS 17+）
 ```
 
-效果的「数学」与「宿主控件」解耦：同一套 `PositionEffect` 传递函数被 UIKit 与 SwiftUI 两端复用。
+效果的「数学」与「宿主控件」解耦：`SlideInEffect` / `RevealEffect` 等是纯函数（`resolve`），由各自平台的驱动器调用。
 
 ## 许可
 
