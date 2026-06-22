@@ -27,7 +27,11 @@ extension UICollectionView: ListEffectHost {
         indexPathsForVisibleItems.compactMap { ip in
             guard let cell = cellForItem(at: ip),
                   let attr = layoutAttributesForItem(at: ip) else { return nil }
-            return (cell, attr.center)
+            // 返回 contentView 而非 cell：UICollectionView 在 layout 时会通过
+            // apply(_ layoutAttributes:) 把 cell.transform 重置为 attributes.transform
+            //（flow layout 默认 identity），覆盖本库写入的位移。contentView 不受
+            // apply 管理，其 transform 得以保留。
+            return (cell.contentView, attr.center)
         }
     }
 }

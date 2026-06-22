@@ -11,6 +11,13 @@ private final class FixedDataSource: NSObject, UITableViewDataSource {
     }
 }
 
+private final class FixedCollectionDataSource: NSObject, UICollectionViewDataSource {
+    func collectionView(_ cv: UICollectionView, numberOfItemsInSection s: Int) -> Int { 50 }
+    func collectionView(_ cv: UICollectionView, cellForItemAt i: IndexPath) -> UICollectionViewCell {
+        cv.dequeueReusableCell(withReuseIdentifier: "c", for: i)
+    }
+}
+
 final class ListEffectControllerTests: XCTestCase {
     private var ds: FixedDataSource!
 
@@ -101,6 +108,38 @@ final class ListEffectControllerTests: XCTestCase {
             weakController = tv.listEffect
         }
         XCTAssertNil(weakController, "controller leaked — CADisplayLink retain cycle?")
+    }
+
+    // 回归：UICollectionView 持续滚动时视差位移必须生效。
+    // 历史 bug：库把位移写入 cell.transform，被 layout 的 apply(_ layoutAttributes:)
+    // 每帧重置为 identity，导致 collection 上视差完全不可见。修复改为写 contentView.transform
+    // （contentView 不受 apply 管理）。此测试模拟真实多帧滚动，锁定修复不被回退。
+    func testParallaxSurvivesCollectionLayoutOnScroll() {
+        let layout = UICollectionViewFlowLayout()
+        layout.itemSize = CGSize(width: 320, height: 80)
+        layout.minimumLineSpacing = 12
+        let cv = UICollectionView(frame: CGRect(x: 0, y: 0, width: 320, height: 480),
+                                  collectionViewLayout: layout)
+        cv.register(UICollectionViewCell.self, forCellWithReuseIdentifier: "c")
+        let cds = FixedCollectionDataSource()
+        cv.dataSource = cds
+        cv.reloadData()
+        cv.layoutIfNeeded()
+        cv.listEffect.attach(ParallaxEffect(amplitude: 80))
+
+        // 模拟真实滚动：每帧改 contentOffset（触发 KVO → apply 当前可见 cell）再 layout。
+        var y: CGFloat = 0
+        for _ in 0..<20 {
+            y += 20
+            cv.contentOffset = CGPoint(x: 0, y: y)
+            cv.layoutIfNeeded()
+        }
+
+        // 持续滚动后，除最后一帧新进入的 cell 外，其余可见 cell 应已带上视差位移。
+        let nonZero = cv.visibleCells.filter { abs($0.contentView.transform.ty) > 0.5 }.count
+        XCTAssertGreaterThan(nonZero, cv.visibleCells.count / 2,
+                             "滚动后多数可见 cell 应有视差位移，实际 \(nonZero)/\(cv.visibleCells.count)")
+        _ = cds
     }
 }
 #endif
