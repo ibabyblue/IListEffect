@@ -31,5 +31,11 @@ final class ListEffectModifierTests: XCTestCase {
         let wrapped = AnyView(Text("row").entranceEffect(SlideInEffect()))
         _ = wrapped  // smoke：构造不崩溃
     }
+
+    func testEntranceEffectWithStaggerIndexBuilds() throws {
+        guard #available(iOS 17.0, macOS 14.0, *) else { throw XCTSkip("需要 iOS 17 / macOS 14") }
+        let wrapped = AnyView(Text("row").entranceEffect(SlideInEffect(), index: 3))
+        _ = wrapped  // smoke：带 stagger index 的重载构造不崩溃
+    }
 }
 #endif

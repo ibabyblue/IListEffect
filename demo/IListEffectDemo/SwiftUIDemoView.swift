@@ -34,7 +34,7 @@ struct SlideInSwiftUIDemoView: View {
                         .fill(colors[i % colors.count])
                         .frame(height: 80)
                         .overlay(Text("Row #\(i)").foregroundStyle(.white))
-                        .entranceEffect(SlideInEffect())
+                        .entranceEffect(SlideInEffect(), index: i)  // 逐行错峰
                 }
             }
             .padding(.horizontal, 16)

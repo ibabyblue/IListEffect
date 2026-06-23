@@ -52,15 +52,24 @@ private struct RotationModifier: ViewModifier {
 @available(iOS 17.0, macOS 14.0, *)
 public extension View {
     /// 入场效果：首次出现时 progress 0→1 驱动的一次性动画。
+    /// - Parameters:
+    ///   - index: 行号；用于从上到下逐行错峰（stagger）。nil 时所有行同时入场。
+    ///   - perRowDelay: 相邻行错峰延迟（秒）。仅当 index 非 nil 时生效。
+    ///   - delayRowCap: 行号参与延迟计算的上限，防止大列表延迟爆炸。
     /// 限制：LazyVStack 回滑销毁重建后会重播入场（SwiftUI 范式，与 UIKit 不一致）。
-    func entranceEffect(_ effect: EntranceEffect) -> some View {
-        modifier(EntranceEffectModifier(effect: effect))
+    func entranceEffect(_ effect: EntranceEffect,
+                        index: Int? = nil,
+                        perRowDelay: TimeInterval = 0.05,
+                        delayRowCap: Int = 12) -> some View {
+        let delay = index.map { TimeInterval(min(max(0, $0), delayRowCap)) * perRowDelay } ?? 0
+        return modifier(EntranceEffectModifier(effect: effect, delay: delay))
     }
 }
 
 @available(iOS 17.0, macOS 14.0, *)
 private struct EntranceEffectModifier: ViewModifier {
     let effect: EntranceEffect
+    let delay: TimeInterval
     @State private var appeared = false
 
     func body(content: Content) -> some View {
@@ -78,7 +87,7 @@ private struct EntranceEffectModifier: ViewModifier {
             .modifier(RotationModifier(radians: appeared ? 0 : initial.rotation, axis: axis, anchor: anchor))
             .opacity(appeared ? 1 : initial.alpha)
             .onAppear {
-                withAnimation(.easeOut(duration: effect.duration)) { appeared = true }
+                withAnimation(.easeOut(duration: effect.duration).delay(delay)) { appeared = true }
             }
     }
 }
