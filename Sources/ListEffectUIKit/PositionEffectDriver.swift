@@ -38,7 +38,9 @@ public final class PositionEffectDriver: NSObject {
         observation?.invalidate()
         guard let sv = scrollView else { return }
         observation = sv.observe(\.contentOffset, options: [.new]) { [weak self] _, _ in
-            DispatchQueue.main.async { self?.apply() }
+            // contentOffset 的 KVO 回调本就在主线程同步触发，直接同步 apply，
+            // 避免把 scroll-linked 效果推后一帧导致 Reveal 跟手滞后。
+            self?.apply()
         }
     }
 

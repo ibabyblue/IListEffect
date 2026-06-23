@@ -37,5 +37,20 @@ final class UIKitEffectOutputTests: XCTestCase {
         applyEffectOutput(EffectOutput(anchor: .center), to: v)
         XCTAssertEqual(v.layer.anchorPoint, CGPoint(x: 0.3, y: 0.3), "center 不应改写已有 anchorPoint")
     }
+
+    /// 3D→2D 通道切换：2D 通道写 view.transform，其 setter 写入 CATransform3DMakeAffineTransform(仿射)，
+    /// 该 3D 矩阵 m34 恒为 0，必然覆盖 3D 通道遗留的 layer.transform.m34 透视。
+    /// 推演：view.transform setter 后 layer.transform = MakeAffineTransform(translation 10,0)，
+    /// 是非 identity 仿射的 3D 投影，因此 **不** 断言 CATransform3DIsIdentity，只锁定无 m34 残留 + 仿射正确。
+    func test3DTo2DChannelSwitchNoPerspectiveResidue() {
+        let v = makeView()
+        // 3D 通道：写 layer.transform，含 m34 = -0.002
+        applyEffectOutput(EffectOutput(rotation: 0.5, rotationAxis: .x, perspective: -0.002), to: v)
+        XCTAssertEqual(v.layer.transform.m34, -0.002, accuracy: 0.0001, "前置：3D 通道应注入透视")
+        // 2D 通道：写 view.transform（底层覆盖 layer.transform，m34 归零）
+        applyEffectOutput(EffectOutput(translation: CGPoint(x: 10, y: 0), rotation: 0, rotationAxis: .z), to: v)
+        XCTAssertEqual(v.layer.transform.m34, 0, "2D 通道应清掉 3D 透视残留")
+        XCTAssertEqual(v.transform.tx, 10, "2D 仿射应正确写入")
+    }
 }
 #endif
