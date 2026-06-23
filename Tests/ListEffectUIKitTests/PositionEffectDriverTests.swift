@@ -21,20 +21,25 @@ final class PositionEffectDriverTests: XCTestCase {
         XCTAssertEqual(p, 0, accuracy: 0.001)
     }
 
-    func testAttachAppliesEffectToVisibleCell() {
-        let cv = UICollectionView(frame: CGRect(x: 0, y: 0, width: 320, height: 480),
-                                  collectionViewLayout: UICollectionViewFlowLayout())
-        cv.register(UICollectionViewCell.self, forCellWithReuseIdentifier: "c")
-        // 让一个 cell 进入可见并布局
-        let cell = cv.dequeueReusableCell(withReuseIdentifier: "c", for: IndexPath(item: 0, section: 0))
-        cv.addSubview(cell)
-        cell.frame = CGRect(x: 0, y: 200, width: 320, height: 80)  // cell.center.y=240 = 视口中心
-        cv.layoutIfNeeded()
+    /// 中心位置（position=0）→ RevealEffect t=1 → scale=1、alpha=1。
+    func testApplyEffectAtCenter() {
+        let cell = UICollectionViewCell(frame: CGRect(x: 0, y: 0, width: 320, height: 80))
+        PositionEffectDriver.applyEffect(RevealEffect(minScale: 0.8), to: cell, at: 0)
+        XCTAssertEqual(cell.alpha, 1, accuracy: 0.001)
+        XCTAssertEqual(cell.transform.a, 1, accuracy: 0.001)
+    }
 
-        cv.scrollEffect.attach(RevealEffect(minScale: 0.8))
-        // 中心位置 → t=1 → alpha≈1（已应用）；不崩即为 attach smoke
-        XCTAssertGreaterThan(cell.contentView.alpha, 0.9)
-        cv.scrollEffect.detach()
+    /// 回归：变换必须施加在 cell 本身，不能在 cell.contentView。
+    /// UICollectionViewCell/UITableViewCell 每次布局复位 contentView.transform，
+    /// 写到 contentView 的变换在屏幕上完全不可见（曾导致 Reveal 缩放/淡出看不出、SlideIn 看不出滑动）。
+    func testApplyEffectTransformsCellNotContentView() {
+        let cell = UICollectionViewCell(frame: CGRect(x: 0, y: 0, width: 320, height: 80))
+        // 边缘位置 → RevealEffect scale=0.8、alpha=0
+        PositionEffectDriver.applyEffect(RevealEffect(minScale: 0.8), to: cell, at: 1)
+        XCTAssertEqual(cell.transform.a, 0.8, accuracy: 0.001, "cell 自身应被缩放")
+        XCTAssertEqual(cell.alpha, 0, accuracy: 0.001, "cell 自身应被淡出")
+        XCTAssertEqual(cell.contentView.transform.a, 1.0, accuracy: 0.001,
+                       "contentView 不应被变换（会被布局复位、屏幕不可见）")
     }
 
     /// Bug2 回归：viewportCenter 必须等于 bounds.midY（已含 contentOffset），

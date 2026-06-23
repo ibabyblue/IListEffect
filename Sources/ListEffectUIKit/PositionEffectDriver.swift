@@ -54,21 +54,27 @@ public final class PositionEffectDriver: NSObject {
     private func apply() {
         guard let effect = effect, let sv = scrollView, sv.bounds.height > 0 else { return }
         let viewportCenter = Self.viewportCenter(of: sv)
-        forEachVisible(in: sv) { cellCenter, contentView in
+        forEachVisible(in: sv) { cellCenter, cell in
             let position = Self.normalizedPosition(cellCenter: cellCenter,
                                                    viewportCenter: viewportCenter,
                                                    viewportHeight: sv.bounds.height)
-            applyEffectOutput(effect.resolve(position: position), to: contentView)
+            Self.applyEffect(effect, to: cell, at: position)
         }
     }
 
-    /// 遍历可见 cell，回调 (cell.center.y, cell.contentView)；UITableViewCell / UICollectionViewCell
-    /// 各自有 contentView 但无共同父类声明，故按宿主类型分别提取。
+    /// 把 effect 在指定 position 的输出施加到 **cell 本身**（而非 contentView）。
+    /// 可测 seam：cell 的 transform 会被布局保留，contentView 的会被复位、屏幕不可见。
+    static func applyEffect(_ effect: PositionEffect, to cell: UIView, at position: CGFloat) {
+        applyEffectOutput(effect.resolve(position: position), to: cell)
+    }
+
+    /// 遍历可见 cell，回调 (cell.center.y, cell)。变换施加在 cell 本身——
+    /// cell.contentView 的 transform 会被 cell 布局复位，故必须用 cell。
     private func forEachVisible(in sv: UIScrollView, _ body: (CGFloat, UIView) -> Void) {
         if let tv = sv as? UITableView {
-            for cell in tv.visibleCells { body(cell.center.y, cell.contentView) }
+            for cell in tv.visibleCells { body(cell.center.y, cell) }
         } else if let cv = sv as? UICollectionView {
-            for cell in cv.visibleCells { body(cell.center.y, cell.contentView) }
+            for cell in cv.visibleCells { body(cell.center.y, cell) }
         }
     }
 

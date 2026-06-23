@@ -5,6 +5,9 @@ import QuartzCore
 
 /// 入场驱动器：CADisplayLink 逐帧采样 effect.resolve(progress)，使 timing 真正生效。
 /// 首次出现做动画；回滑再次出现直接归位。
+///
+/// 注意：变换施加在 **cell 本身**（而非 cell.contentView）。UITableViewCell /
+/// UICollectionViewCell 会在每次布局把 contentView 的 transform 复位，故必须变换 cell。
 public final class ListEffectEntrance {
     /// 相邻行错开延迟（秒）。
     public var perRowDelay: TimeInterval = 0.05
@@ -16,7 +19,7 @@ public final class ListEffectEntrance {
     var initialBatchTriggered = false
 
     struct Animation {
-        let contentView: UIView
+        let view: UIView
         let indexPath: IndexPath
         let start: CFTimeInterval
     }
@@ -32,7 +35,7 @@ public final class ListEffectEntrance {
             let elapsed = timestamp - anim.start
             if elapsed < 0 { continue }
             let progress = CGFloat(max(0, min(1, elapsed / effect.duration)))
-            applyEffectOutput(effect.resolve(progress: progress), to: anim.contentView)
+            applyEffectOutput(effect.resolve(progress: progress), to: anim.view)
             if progress >= 1 { finished.append(id) }
         }
         for id in finished { animating.removeValue(forKey: id) }
@@ -53,7 +56,7 @@ public final class ListEffectEntrance {
     public func detach() {
         displayLink?.invalidate()
         displayLink = nil
-        for anim in animating.values { reset(anim.contentView) }
+        for anim in animating.values { reset(anim.view) }
         animating.removeAll()
         displayedIndexPaths.removeAll()
         initialBatchTriggered = false
@@ -61,7 +64,7 @@ public final class ListEffectEntrance {
 
     /// 首批入场：对可见 cell 从上到下错开延迟动画。幂等，仅首次生效。
     /// - Parameter cells: 传 nil 则从绑定的 scrollView 取 visibleCells；测试可显式传入。
-    public func animateInitialBatch(_ cells: [(contentView: UIView, indexPath: IndexPath)]? = nil) {
+    public func animateInitialBatch(_ cells: [(view: UIView, indexPath: IndexPath)]? = nil) {
         guard !initialBatchTriggered, let effect = effect else { return }
         initialBatchTriggered = true
         let pairs = cells ?? visibleCellPairs() ?? []
@@ -73,62 +76,62 @@ public final class ListEffectEntrance {
         for (row, pair) in sorted.enumerated() {
             if displayedIndexPaths.contains(pair.indexPath) { continue }
             displayedIndexPaths.insert(pair.indexPath)
-            let id = ObjectIdentifier(pair.contentView)
+            let id = ObjectIdentifier(pair.view)
             animating.removeValue(forKey: id)
-            applyEffectOutput(effect.resolve(progress: 0), to: pair.contentView)
+            applyEffectOutput(effect.resolve(progress: 0), to: pair.view)
             let delay = TimeInterval(min(row, delayRowCap)) * perRowDelay
-            animating[id] = Animation(contentView: pair.contentView,
+            animating[id] = Animation(view: pair.view,
                                       indexPath: pair.indexPath,
                                       start: clock() + delay)
         }
         if !animating.isEmpty { ensureDisplayLinkRunning() }
     }
 
-    private func visibleCellPairs() -> [(contentView: UIView, indexPath: IndexPath)]? {
+    private func visibleCellPairs() -> [(view: UIView, indexPath: IndexPath)]? {
         guard let sv = scrollView else { return nil }
         if let tv = sv as? UITableView {
             return tv.visibleCells.compactMap { cell in
                 guard let ip = tv.indexPath(for: cell) else { return nil }
-                return (cell.contentView, ip)
+                return (cell, ip)
             }
         }
         if let cv = sv as? UICollectionView {
             return cv.visibleCells.compactMap { cell in
                 guard let ip = cv.indexPath(for: cell) else { return nil }
-                return (cell.contentView, ip)
+                return (cell, ip)
             }
         }
         return []
     }
 
     public func handle(cell: UITableViewCell, indexPath: IndexPath, delay: TimeInterval = 0) {
-        handle(contentView: cell.contentView, indexPath: indexPath, delay: delay)
+        handle(view: cell, indexPath: indexPath, delay: delay)
     }
     public func handle(cell: UICollectionViewCell, indexPath: IndexPath, delay: TimeInterval = 0) {
-        handle(contentView: cell.contentView, indexPath: indexPath, delay: delay)
+        handle(view: cell, indexPath: indexPath, delay: delay)
     }
 
-    public func prepare(cell: UITableViewCell) { prepare(contentView: cell.contentView) }
-    public func prepare(cell: UICollectionViewCell) { prepare(contentView: cell.contentView) }
-    private func prepare(contentView: UIView) {
+    public func prepare(cell: UITableViewCell) { prepare(view: cell) }
+    public func prepare(cell: UICollectionViewCell) { prepare(view: cell) }
+    private func prepare(view: UIView) {
         guard let effect = effect else { return }
-        applyEffectOutput(effect.resolve(progress: 0), to: contentView)
+        applyEffectOutput(effect.resolve(progress: 0), to: view)
     }
 
-    private func handle(contentView: UIView, indexPath: IndexPath, delay: TimeInterval) {
+    private func handle(view: UIView, indexPath: IndexPath, delay: TimeInterval) {
         guard let effect = effect else { return }
         if !initialBatchTriggered { return }  // 首批由 animateInitialBatch 统一处理
-        let id = ObjectIdentifier(contentView)
+        let id = ObjectIdentifier(view)
         if displayedIndexPaths.contains(indexPath) {
             animating.removeValue(forKey: id)
-            reset(contentView)
+            reset(view)
             return
         }
         displayedIndexPaths.insert(indexPath)
         animating.removeValue(forKey: id)  // cell 复用：清旧条目
         // 兜底：handle 启动即设初始态，漏调 prepare 也不闪
-        applyEffectOutput(effect.resolve(progress: 0), to: contentView)
-        animating[id] = Animation(contentView: contentView, indexPath: indexPath, start: clock() + delay)
+        applyEffectOutput(effect.resolve(progress: 0), to: view)
+        animating[id] = Animation(view: view, indexPath: indexPath, start: clock() + delay)
         ensureDisplayLinkRunning()
     }
 
