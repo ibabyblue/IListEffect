@@ -48,4 +48,38 @@ private struct RotationModifier: ViewModifier {
         }
     }
 }
+
+@available(iOS 17.0, macOS 14.0, *)
+public extension View {
+    /// 入场效果：首次出现时 progress 0→1 驱动的一次性动画。
+    /// 限制：LazyVStack 回滑销毁重建后会重播入场（SwiftUI 范式，与 UIKit 不一致）。
+    func entranceEffect(_ effect: EntranceEffect) -> some View {
+        modifier(EntranceEffectModifier(effect: effect))
+    }
+}
+
+@available(iOS 17.0, macOS 14.0, *)
+private struct EntranceEffectModifier: ViewModifier {
+    let effect: EntranceEffect
+    @State private var progress: CGFloat = 0
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func body(content: Content) -> some View {
+        let out = effect.resolve(progress: progress)
+        let axis = out.rotationAxis ?? .z
+        let anchor = UnitPoint(x: (out.anchor ?? .center).x, y: (out.anchor ?? .center).y)
+        return content
+            .offset(x: out.translation.x, y: out.translation.y)
+            .scaleEffect(out.scale, anchor: anchor)
+            .modifier(RotationModifier(radians: out.rotation, axis: axis, anchor: anchor))
+            .opacity(out.alpha)
+            .onAppear {
+                withAnimation(.linear(duration: effect.duration)) { progress = 1 }
+            }
+    }
+}
 #endif
