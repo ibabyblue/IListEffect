@@ -100,6 +100,51 @@ final class ListEffectEntranceTests: XCTestCase {
         XCTAssertNil(entrance.animating[ObjectIdentifier(cell.contentView)], "完成后应移出 animating")
     }
 
+    func testTickAdvancesProgressAndAppliesIntermediateFrame() {
+        let entrance = ListEffectEntrance()
+        let amplitude: CGFloat = 220
+        let duration = 0.5
+        entrance.attach(SlideInEffect(amplitude: amplitude, duration: duration, timing: .easeOut))
+        entrance.clock = { 1000.0 }
+        let cell = makeCell()
+        let id = IndexPath(item: 0, section: 0)
+        entrance.handle(cell: cell, indexPath: id)
+
+        // 起始帧：初始态（右偏 220、alpha 0）
+        entrance.tick(at: 1000.0)
+        XCTAssertEqual(cell.contentView.transform.tx, amplitude, accuracy: 1.0)
+
+        // 中间帧（progress 0.5）：easeOut → t=0.875 → x=amplitude*(1-0.875)
+        // 验证 timing 真正被采样（修复点）
+        entrance.tick(at: 1000.0 + duration / 2)
+        XCTAssertEqual(cell.contentView.transform.tx, amplitude * (1 - 0.875), accuracy: 2.0)
+    }
+
+    func testTickAtCompletionClearsAnimation() {
+        let entrance = ListEffectEntrance()
+        entrance.attach(SlideInEffect(amplitude: 220, duration: 0.05, timing: .easeOut))
+        entrance.clock = { 2000.0 }
+        let cell = makeCell()
+        entrance.handle(cell: cell, indexPath: IndexPath(item: 0, section: 0))
+        entrance.tick(at: 2000.0 + 0.1)  // 超过 duration
+
+        XCTAssertEqual(cell.contentView.transform.tx, 0, accuracy: 1.0)
+        XCTAssertEqual(cell.contentView.alpha, 1, accuracy: 0.05)
+        XCTAssertNil(entrance.animating[ObjectIdentifier(cell.contentView)])
+    }
+
+    func testHandleFallbackAppliesInitialState() {
+        // 漏调 prepare：handle 启动时自带兜底设初始态，不闪
+        let entrance = ListEffectEntrance()
+        entrance.attach(SlideInEffect(amplitude: 220, duration: 0.5, timing: .easeOut))
+        entrance.clock = { 3000.0 }
+        let cell = makeCell()
+        entrance.handle(cell: cell, indexPath: IndexPath(item: 0, section: 0))
+        entrance.tick(at: 3000.0)
+        XCTAssertEqual(cell.contentView.transform.tx, 220, accuracy: 1.0)
+        XCTAssertEqual(cell.contentView.alpha, 0, accuracy: 0.001)
+    }
+
     func testEntranceDeallocatesAfterScrollViewReleased() {
         weak var weakEntrance: ListEffectEntrance?
         autoreleasepool {
