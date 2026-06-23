@@ -13,6 +13,7 @@ public final class ListEffectEntrance {
 
     var effect: EntranceEffect?
     var displayedIndexPaths = Set<IndexPath>()
+    var initialBatchTriggered = false
 
     struct Animation {
         let contentView: UIView
@@ -55,6 +56,49 @@ public final class ListEffectEntrance {
         for anim in animating.values { reset(anim.contentView) }
         animating.removeAll()
         displayedIndexPaths.removeAll()
+        initialBatchTriggered = false
+    }
+
+    /// 首批入场：对可见 cell 从上到下错开延迟动画。幂等，仅首次生效。
+    /// - Parameter cells: 传 nil 则从绑定的 scrollView 取 visibleCells；测试可显式传入。
+    public func animateInitialBatch(_ cells: [(contentView: UIView, indexPath: IndexPath)]? = nil) {
+        guard !initialBatchTriggered, let effect = effect else { return }
+        initialBatchTriggered = true
+        let pairs = cells ?? visibleCellPairs() ?? []
+        let sorted = pairs.sorted { lhs, rhs in
+            let l = lhs.indexPath.section * 100_000 + lhs.indexPath.item
+            let r = rhs.indexPath.section * 100_000 + rhs.indexPath.item
+            return l < r
+        }
+        for (row, pair) in sorted.enumerated() {
+            if displayedIndexPaths.contains(pair.indexPath) { continue }
+            displayedIndexPaths.insert(pair.indexPath)
+            let id = ObjectIdentifier(pair.contentView)
+            animating.removeValue(forKey: id)
+            applyEffectOutput(effect.resolve(progress: 0), to: pair.contentView)
+            let delay = TimeInterval(min(row, delayRowCap)) * perRowDelay
+            animating[id] = Animation(contentView: pair.contentView,
+                                      indexPath: pair.indexPath,
+                                      start: clock() + delay)
+        }
+        if !animating.isEmpty { ensureDisplayLinkRunning() }
+    }
+
+    private func visibleCellPairs() -> [(contentView: UIView, indexPath: IndexPath)]? {
+        guard let sv = scrollView else { return nil }
+        if let tv = sv as? UITableView {
+            return tv.visibleCells.compactMap { cell in
+                guard let ip = tv.indexPath(for: cell) else { return nil }
+                return (cell.contentView, ip)
+            }
+        }
+        if let cv = sv as? UICollectionView {
+            return cv.visibleCells.compactMap { cell in
+                guard let ip = cv.indexPath(for: cell) else { return nil }
+                return (cell.contentView, ip)
+            }
+        }
+        return []
     }
 
     public func handle(cell: UITableViewCell, indexPath: IndexPath, delay: TimeInterval = 0) {
@@ -73,6 +117,7 @@ public final class ListEffectEntrance {
 
     private func handle(contentView: UIView, indexPath: IndexPath, delay: TimeInterval) {
         guard let effect = effect else { return }
+        if !initialBatchTriggered { return }  // 首批由 animateInitialBatch 统一处理
         let id = ObjectIdentifier(contentView)
         if displayedIndexPaths.contains(indexPath) {
             animating.removeValue(forKey: id)

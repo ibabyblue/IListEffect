@@ -54,6 +54,7 @@ final class ListEffectEntranceTests: XCTestCase {
     func testHandleRecordsAnimatingAndDisplayed() {
         let entrance = ListEffectEntrance()
         entrance.attach(SlideInEffect(amplitude: 220, duration: 0.5, timing: .easeOut))
+        entrance.animateInitialBatch([])  // 标记首批已过，handle 进入正常滚动路径
         let cell = makeCell()
         let ip = IndexPath(item: 0, section: 0)
         entrance.handle(cell: cell, indexPath: ip)
@@ -64,6 +65,7 @@ final class ListEffectEntranceTests: XCTestCase {
     func testRedisplayDoesNotAnimate() {
         let entrance = ListEffectEntrance()
         entrance.attach(SlideInEffect(amplitude: 220, duration: 0.5, timing: .easeOut))
+        entrance.animateInitialBatch([])  // 标记首批已过，handle 进入正常滚动路径
         let cell = makeCell()
         let ip = IndexPath(item: 0, section: 0)
         entrance.handle(cell: cell, indexPath: ip)   // 首次
@@ -76,6 +78,7 @@ final class ListEffectEntranceTests: XCTestCase {
     func testCellReuseRestartsAnimation() {
         let entrance = ListEffectEntrance()
         entrance.attach(SlideInEffect(amplitude: 220, duration: 0.5, timing: .easeOut))
+        entrance.animateInitialBatch([])  // 标记首批已过，handle 进入正常滚动路径
         let cell = makeCell()
         entrance.handle(cell: cell, indexPath: IndexPath(item: 0, section: 0))
         // 同一 contentView 复用给新 indexPath，应重新入场
@@ -87,6 +90,7 @@ final class ListEffectEntranceTests: XCTestCase {
     func testAnimationCompletesAndClears() {
         let entrance = ListEffectEntrance()
         entrance.attach(SlideInEffect(amplitude: 220, duration: 0.05, timing: .easeOut))
+        entrance.animateInitialBatch([])  // 标记首批已过，handle 进入正常滚动路径
         let cell = makeCell()
         entrance.handle(cell: cell, indexPath: IndexPath(item: 0, section: 0))
 
@@ -106,6 +110,7 @@ final class ListEffectEntranceTests: XCTestCase {
         let duration = 0.5
         entrance.attach(SlideInEffect(amplitude: amplitude, duration: duration, timing: .easeOut))
         entrance.clock = { 1000.0 }
+        entrance.animateInitialBatch([])  // 标记首批已过，handle 进入正常滚动路径
         let cell = makeCell()
         let id = IndexPath(item: 0, section: 0)
         entrance.handle(cell: cell, indexPath: id)
@@ -124,6 +129,7 @@ final class ListEffectEntranceTests: XCTestCase {
         let entrance = ListEffectEntrance()
         entrance.attach(SlideInEffect(amplitude: 220, duration: 0.05, timing: .easeOut))
         entrance.clock = { 2000.0 }
+        entrance.animateInitialBatch([])  // 标记首批已过，handle 进入正常滚动路径
         let cell = makeCell()
         entrance.handle(cell: cell, indexPath: IndexPath(item: 0, section: 0))
         entrance.tick(at: 2000.0 + 0.1)  // 超过 duration
@@ -138,11 +144,52 @@ final class ListEffectEntranceTests: XCTestCase {
         let entrance = ListEffectEntrance()
         entrance.attach(SlideInEffect(amplitude: 220, duration: 0.5, timing: .easeOut))
         entrance.clock = { 3000.0 }
+        entrance.animateInitialBatch([])  // 标记首批已过，handle 进入正常滚动路径
         let cell = makeCell()
         entrance.handle(cell: cell, indexPath: IndexPath(item: 0, section: 0))
         entrance.tick(at: 3000.0)
         XCTAssertEqual(cell.contentView.transform.tx, 220, accuracy: 1.0)
         XCTAssertEqual(cell.contentView.alpha, 0, accuracy: 0.001)
+    }
+
+    func testAnimateInitialBatchIsIdempotent() {
+        let entrance = ListEffectEntrance()
+        entrance.attach(SlideInEffect(amplitude: 220, duration: 0.5, timing: .easeOut))
+        entrance.clock = { 4000.0 }
+        let cell1 = makeCell(), cell2 = makeCell()
+        let cells: [(contentView: UIView, indexPath: IndexPath)] = [
+            (cell1.contentView, IndexPath(item: 0, section: 0)),
+            (cell2.contentView, IndexPath(item: 1, section: 0)),
+        ]
+        entrance.animateInitialBatch(cells)
+        XCTAssertEqual(entrance.animating.count, 2)
+        entrance.animating.removeAll()  // 模拟首批已结束
+        entrance.animateInitialBatch(cells)  // 二次：应 no-op
+        XCTAssertTrue(entrance.animating.isEmpty, "二次调用不应再次动画")
+    }
+
+    func testAnimateInitialBatchAppliesStaggeredDelays() {
+        let entrance = ListEffectEntrance()
+        entrance.attach(SlideInEffect(amplitude: 220, duration: 0.5, timing: .easeOut))
+        entrance.clock = { 5000.0 }
+        let cell0 = makeCell(), cell1 = makeCell()
+        let cells: [(contentView: UIView, indexPath: IndexPath)] = [
+            (cell0.contentView, IndexPath(item: 0, section: 0)),
+            (cell1.contentView, IndexPath(item: 1, section: 0)),
+        ]
+        entrance.animateInitialBatch(cells)
+        let start0 = entrance.animating[ObjectIdentifier(cell0.contentView)]!.start
+        let start1 = entrance.animating[ObjectIdentifier(cell1.contentView)]!.start
+        XCTAssertEqual(start1 - start0, entrance.perRowDelay, accuracy: 0.001, "第 1 行应错开 perRowDelay")
+    }
+
+    func testHandleNoOpBeforeInitialBatch() {
+        // 首批前 handle 应 no-op，等 animateInitialBatch 统一处理
+        let entrance = ListEffectEntrance()
+        entrance.attach(SlideInEffect(amplitude: 220, duration: 0.5, timing: .easeOut))
+        let cell = makeCell()
+        entrance.handle(cell: cell, indexPath: IndexPath(item: 0, section: 0))
+        XCTAssertTrue(entrance.animating.isEmpty, "initialBatchTriggered 前应 no-op")
     }
 
     func testEntranceDeallocatesAfterScrollViewReleased() {
