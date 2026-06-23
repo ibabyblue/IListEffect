@@ -3,8 +3,10 @@ import Foundation
 
 /// 从右滑入：cell 从右侧偏移位置滑回原位，同时淡入。
 public struct SlideInEffect: EntranceEffect {
-    public enum Timing {
+    public enum Timing: Equatable {
         case easeOut, easeInOut, easeOutBack
+        /// 欠阻尼弹簧：damping 越大衰减越快，frequency 越大振荡越快。
+        case spring(damping: CGFloat, frequency: CGFloat)
 
         /// 把线性 progress（0→1）映射为缓动后的 t（可能略超 1，用于回弹）。
         func apply(to progress: CGFloat) -> CGFloat {
@@ -18,6 +20,11 @@ public struct SlideInEffect: EntranceEffect {
                 let c1: CGFloat = 1.70158
                 let c3: CGFloat = c1 + 1
                 return 1 + c3 * pow(t - 1, 3) + c1 * pow(t - 1, 2)
+            case .spring(let damping, let frequency):
+                // 欠阻尼振荡：包络指数衰减，余弦振荡形成回弹。
+                let omega = frequency * 2 * .pi * 2
+                let envelope = exp(-damping * t * 6)
+                return 1 - envelope * cos(omega * t)
             }
         }
     }

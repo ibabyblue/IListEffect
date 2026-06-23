@@ -48,4 +48,17 @@ final class SlideInEffectTests: XCTestCase {
         XCTAssertEqual(e.duration, 0.5)
         XCTAssertEqual(e.timing, .easeOutBack)
     }
+
+    func testSpringEndpoints() {
+        let t = SlideInEffect.Timing.spring(damping: 0.5, frequency: 1.0)
+        XCTAssertEqual(t.apply(to: 0), 0, accuracy: 0.001)
+        XCTAssertEqual(t.apply(to: 1), 1, accuracy: 0.05, "spring 在 progress=1 应收敛到 1")
+    }
+
+    func testSpringOvershoots() {
+        let t = SlideInEffect.Timing.spring(damping: 0.3, frequency: 1.2)
+        // 中段应存在回弹（>1）
+        let values = stride(from: 0.0, through: 1.0, by: 0.05).map { t.apply(to: CGFloat($0)) }
+        XCTAssertTrue(values.contains(where: { $0 > 1.0 }), "欠阻尼 spring 应出现超调")
+    }
 }
