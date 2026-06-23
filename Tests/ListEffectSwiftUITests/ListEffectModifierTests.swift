@@ -14,5 +14,16 @@ final class ListEffectModifierTests: XCTestCase {
         let wrapped = AnyView(Text("row").listEffect(RevealEffect(minScale: 0.8)))
         _ = wrapped
     }
+
+    func testListEffectBuildsWith3DAxis() throws {
+        guard #available(iOS 17.0, macOS 14.0, *) else { throw XCTSkip("需要 iOS 17 / macOS 14") }
+        struct Tilt: PositionEffect {
+            func resolve(position: CGFloat) -> EffectOutput {
+                EffectOutput(rotation: position * 0.5, rotationAxis: .x, perspective: -0.002)
+            }
+        }
+        let wrapped = AnyView(Text("row").listEffect(Tilt()))
+        _ = wrapped  // smoke：构造不崩溃
+    }
 }
 #endif
