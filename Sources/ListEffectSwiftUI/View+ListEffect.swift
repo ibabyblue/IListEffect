@@ -61,24 +61,24 @@ public extension View {
 @available(iOS 17.0, macOS 14.0, *)
 private struct EntranceEffectModifier: ViewModifier {
     let effect: EntranceEffect
-    @State private var progress: CGFloat = 0
-
-    var animatableData: CGFloat {
-        get { progress }
-        set { progress = newValue }
-    }
+    @State private var appeared = false
 
     func body(content: Content) -> some View {
-        let out = effect.resolve(progress: progress)
-        let axis = out.rotationAxis ?? .z
-        let anchor = UnitPoint(x: (out.anchor ?? .center).x, y: (out.anchor ?? .center).y)
+        // 取入场初始态；appeared 切换到 identity，由 withAnimation 在两端点间插值。
+        // 用端点插值（而非逐帧 resolve+timing）避免 easeOutBack 回弹造成的方向错乱，
+        // 并提高 LazyVStack 复用下的稳定性。已知限制：LazyVStack 复用/缓冲可能导致部分
+        // cell 不重播入场——属 SwiftUI 范式限制。
+        let initial = effect.resolve(progress: 0)
+        let axis = initial.rotationAxis ?? .z
+        let anchor = UnitPoint(x: (initial.anchor ?? .center).x, y: (initial.anchor ?? .center).y)
         return content
-            .offset(x: out.translation.x, y: out.translation.y)
-            .scaleEffect(out.scale, anchor: anchor)
-            .modifier(RotationModifier(radians: out.rotation, axis: axis, anchor: anchor))
-            .opacity(out.alpha)
+            .offset(x: appeared ? 0 : initial.translation.x,
+                    y: appeared ? 0 : initial.translation.y)
+            .scaleEffect(appeared ? 1 : initial.scale, anchor: anchor)
+            .modifier(RotationModifier(radians: appeared ? 0 : initial.rotation, axis: axis, anchor: anchor))
+            .opacity(appeared ? 1 : initial.alpha)
             .onAppear {
-                withAnimation(.linear(duration: effect.duration)) { progress = 1 }
+                withAnimation(.easeOut(duration: effect.duration)) { appeared = true }
             }
     }
 }
