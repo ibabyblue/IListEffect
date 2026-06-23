@@ -44,9 +44,12 @@ public struct SlideInEffect: EntranceEffect {
 
     public func resolve(progress: CGFloat) -> EffectOutput {
         let t = timing.apply(to: progress)
+        // alpha 前 ~20% 进度快速淡入到满，之后保持 1——让 translation 的横向滑入全程可见，
+        // 而非「早期 alpha 低看不见位移、等可见时已到原位」的纯淡入观感。
+        let alpha = min(1, max(0, progress * 5))
         return EffectOutput(
             translation: CGPoint(x: amplitude * (1 - t), y: 0),
-            alpha: t
+            alpha: alpha
         )
     }
 }
