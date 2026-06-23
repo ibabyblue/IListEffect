@@ -34,6 +34,13 @@ public final class PositionEffectDriver: NSObject {
         return (cellCenter - viewportCenter) / (viewportHeight / 2)
     }
 
+    /// 视口中心在 content 坐标系的位置。
+    /// UIScrollView 的 bounds.origin == contentOffset，故 bounds.midY 已含 contentOffset——
+    /// 直接用 bounds.midY，切勿再 + contentOffset.y（会重复叠加，cell 越滚越偏 → 全淡出）。
+    static func viewportCenter(of scrollView: UIScrollView) -> CGFloat {
+        scrollView.bounds.midY
+    }
+
     private func startObserving() {
         observation?.invalidate()
         guard let sv = scrollView else { return }
@@ -46,7 +53,7 @@ public final class PositionEffectDriver: NSObject {
 
     private func apply() {
         guard let effect = effect, let sv = scrollView, sv.bounds.height > 0 else { return }
-        let viewportCenter = sv.contentOffset.y + sv.bounds.midY
+        let viewportCenter = Self.viewportCenter(of: sv)
         forEachVisible(in: sv) { cellCenter, contentView in
             let position = Self.normalizedPosition(cellCenter: cellCenter,
                                                    viewportCenter: viewportCenter,

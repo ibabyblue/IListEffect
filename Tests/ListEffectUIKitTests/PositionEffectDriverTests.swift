@@ -37,6 +37,28 @@ final class PositionEffectDriverTests: XCTestCase {
         cv.scrollEffect.detach()
     }
 
+    /// Bug2 回归：viewportCenter 必须等于 bounds.midY（已含 contentOffset），
+    /// 不能再 + contentOffset.y。否则滚动后 viewportCenter 翻倍，cell 全部淡出（Reveal 全黑）。
+    func testViewportCenterDoesNotDoubleCountOffset() {
+        let sv = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 480))
+        sv.contentSize = CGSize(width: 320, height: 5000)
+
+        // 未滚动：viewportCenter = 0 + 480/2 = 240
+        XCTAssertEqual(PositionEffectDriver.viewportCenter(of: sv), 240, accuracy: 0.001)
+
+        // 滚动到 offset 700：bounds.origin.y 随之变 700，midY = 700 + 240 = 940（content 坐标）
+        sv.contentOffset = CGPoint(x: 0, y: 700)
+        XCTAssertEqual(PositionEffectDriver.viewportCenter(of: sv), 940, accuracy: 0.001,
+                       "viewportCenter 应为 offset+midY=940，而非重复叠加的 1640")
+
+        // 验证：滚动后，content 坐标 y=940 的 cell（正处视口中心）position≈0
+        let pos = PositionEffectDriver.normalizedPosition(
+            cellCenter: 940,
+            viewportCenter: PositionEffectDriver.viewportCenter(of: sv),
+            viewportHeight: sv.bounds.height)
+        XCTAssertEqual(pos, 0, accuracy: 0.001, "视口中心的 cell 滚动后仍应 position≈0")
+    }
+
     func testScrollEffectAssociatedObjectIsSingleton() {
         let cv = UICollectionView(frame: .zero, collectionViewLayout: UICollectionViewFlowLayout())
         XCTAssertTrue(cv.scrollEffect === cv.scrollEffect)
