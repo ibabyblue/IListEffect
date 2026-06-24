@@ -48,7 +48,7 @@ final class SlideInEffectTests: XCTestCase {
         let e = SlideInEffect()
         XCTAssertEqual(e.amplitude, 220)
         XCTAssertEqual(e.duration, 0.5)
-        XCTAssertEqual(e.timing, .easeOutBack)
+        XCTAssertEqual(e.timing, .easeOut)
     }
 
     /// Bug1 回归：滑入早期 alpha 必须已快速变满，否则横向位移在 cell 不可见时就走完，看不到滑入。

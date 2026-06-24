@@ -36,7 +36,7 @@ public struct SlideInEffect: EntranceEffect {
 
     public init(amplitude: CGFloat = 220,
                 duration: TimeInterval = 0.5,
-                timing: Timing = .easeOutBack) {
+                timing: Timing = .easeOut) {
         self.amplitude = amplitude
         self.duration = duration
         self.timing = timing
