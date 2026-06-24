@@ -103,10 +103,15 @@ Detach with `tableView.scrollEffect.detach()`.
 
 ### SwiftUI (iOS 17+)
 
-Two modifiers, mirroring the UIKit entries:
+Two row modifiers, mirroring the UIKit entries, plus one container modifier for entrance:
 
 - `.listEffect(_:)` — position-based, scroll-linked (built on `.scrollTransition`, apply per row). Honors `rotationAxis` / `anchor`.
-- `.entranceEffect(_:)` — one-shot entrance on first appear (e.g. `SlideInEffect`). Note: in a `LazyVStack`, scroll-back destroys and rebuilds rows, so the entrance replays — a SwiftUI paradigm that differs from UIKit's "show once" behavior.
+- `.entranceEffect(_:index:)` — one-shot entrance, played the first time a row actually enters the viewport. Pass `index:` — it is both the per-row stagger key and the "enter once" latch key.
+- `.listEntrance()` — **container** modifier on the `ScrollView`. Installs a shared coordinator + real-visibility tracking so each row enters exactly once and never replays on scroll-back.
+
+> **Note:** SwiftUI entrance is currently **experimental**. The demo has it disabled (uses scroll-linked Reveal instead) while we refine the experience. The APIs remain available; feel free to enable and tune (`perRowDelay`/`delayRowCap`) for your use case.
+
+Why the container: a bare `.onAppear` entrance in a `LazyVStack` fires in the off-screen render buffer, so the animation often finishes before the row is actually visible — some rows appear pre-settled, others animate, and the list looks fragmented. `.listEntrance()` drives the entrance from real scroll geometry instead of `onAppear` timing, so every row that scrolls in slides in consistently (no fragmentation), the first screen still staggers top-to-bottom, and rows scrolled back into view do **not** replay — matching UIKit's "show once" semantics.
 
 ```swift
 import SwiftUI
@@ -115,14 +120,16 @@ import ListEffectCore
 
 ScrollView {
     LazyVStack {
-        ForEach(items) { item in
+        ForEach(Array(items.enumerated()), id: \.offset) { i, item in
             RowView(item)
-                .listEffect(RevealEffect(minScale: 0.8))   // position-based
-                // or one-shot entrance:
-                // .entranceEffect(SlideInEffect())
+                // Entrance (experimental):
+                // .entranceEffect(SlideInEffect(), index: i)
+                // Position-based (stable):
+                .listEffect(RevealEffect(minScale: 0.8))
         }
     }
 }
+// .listEntrance()   // required for entrance to work reliably
 ```
 
 ## Built-in effects and support matrix
@@ -130,7 +137,7 @@ ScrollView {
 | Effect | UIKit | SwiftUI | Notes |
 |------|:---:|:---:|------|
 | `SpringyCollectionLayout` | ✅ Collection | — | Real UIDynamics springs with inertial bounce |
-| `SlideInEffect` | ✅ Table / Collection | ✅ | Entrance; slides in from the right on first appearance. UIKit: no re-animate on scroll-back. |
+| `SlideInEffect` | ✅ Table / Collection | ✅ | Entrance; slides in from the right on first appearance, no re-animate on scroll-back (SwiftUI requires `.listEntrance()` on the ScrollView). Default timing is `easeOut` (no overshoot/bounce); pass `.easeOutBack` / `.spring` explicitly to opt into a rebound. |
 | `RevealEffect` | ✅ Table / Collection | ✅ | Position; scale + fade in as cells enter the viewport |
 
 Entry points:
@@ -139,7 +146,7 @@ Entry points:
 |------|------|------|------|
 | `scrollView.entrance` | UIKit | `EntranceEffect` | `ListEffectEntrance` (CADisplayLink per-frame sampling; timing now in effect) |
 | `scrollView.scrollEffect` | UIKit | `PositionEffect` | `PositionEffectDriver` (KVO on `contentOffset`) |
-| `.entranceEffect(_:)` | SwiftUI | `EntranceEffect` | one-shot on appear |
+| `.entranceEffect(_:index:)` | SwiftUI | `EntranceEffect` | one-shot, real-visibility driven (+ `.listEntrance()` container for enter-once latch) |
 | `.listEffect(_:)` | SwiftUI | `PositionEffect` | `.scrollTransition` |
 
 `SlideInEffect` conforms to `EntranceEffect`; `RevealEffect` conforms to `PositionEffect`. Both effect families share the same `EffectOutput` fields.
@@ -197,7 +204,7 @@ For `PositionEffect`, `position` is the normalized in-viewport position (-1 top 
 ```
 ListEffectCore     Pure effect logic (EffectOutput / PositionEffect / EntranceEffect / built-in effects), no UI dependencies
 ListEffectUIKit    SpringyCollectionLayout (UIDynamics) + ListEffectEntrance (CADisplayLink entrance driver) + PositionEffectDriver (KVO position driver)
-ListEffectSwiftUI  ViewModifiers built on .scrollTransition / onAppear (iOS 17+)
+ListEffectSwiftUI  ViewModifiers: .listEffect on .scrollTransition; .entranceEffect + .listEntrance on real scroll-geometry visibility with an enter-once coordinator (iOS 17+)
 ```
 
 Effect **math** is decoupled from the **host control**: `SlideInEffect` / `RevealEffect` are pure functions (`resolve`) invoked by each platform's driver.

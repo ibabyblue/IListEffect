@@ -16,9 +16,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         reveal.tabBarItem = UITabBarItem(title: "Reveal", image: UIImage(systemName: "rectangle.dashed"), tag: 2)
         let swiftuiReveal = UIHostingController(rootView: SwiftUIDemoView())
         swiftuiReveal.tabBarItem = UITabBarItem(title: "SwiftUI Reveal", image: UIImage(systemName: "swift"), tag: 3)
-        let swiftuiSlideIn = UIHostingController(rootView: SlideInSwiftUIDemoView())
-        swiftuiSlideIn.tabBarItem = UITabBarItem(title: "SwiftUI SlideIn", image: UIImage(systemName: "arrow.left.square"), tag: 4)
-        tab.viewControllers = [springy, collection, reveal, swiftuiReveal, swiftuiSlideIn]
+        tab.viewControllers = [springy, collection, reveal, swiftuiReveal]
 
         let window = UIWindow(frame: UIScreen.main.bounds)
         window.rootViewController = tab

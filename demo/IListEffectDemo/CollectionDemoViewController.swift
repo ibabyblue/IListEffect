@@ -17,6 +17,7 @@ final class CollectionDemoViewController: UIViewController, UICollectionViewData
         collectionView.backgroundColor = .systemBackground
         collectionView.dataSource = self
         collectionView.delegate = self
+        collectionView.isHidden = true
         collectionView.register(UICollectionViewCell.self, forCellWithReuseIdentifier: "c")
         view.addSubview(collectionView)
         collectionView.entrance.attach(SlideInEffect())
@@ -24,6 +25,7 @@ final class CollectionDemoViewController: UIViewController, UICollectionViewData
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        collectionView.isHidden = false
         collectionView.entrance.animateInitialBatch()  // 一行收编首批 stagger
     }
 

@@ -22,22 +22,3 @@ struct SwiftUIDemoView: View {
     }
 }
 
-/// SwiftUI · Slide In：入场一次性滑入动画（.entranceEffect）。
-struct SlideInSwiftUIDemoView: View {
-    private let colors: [Color] = [.red, .orange, .green, .blue, .purple]
-
-    var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 12) {
-                ForEach(0..<50, id: \.self) { i in
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(colors[i % colors.count])
-                        .frame(height: 80)
-                        .overlay(Text("Row #\(i)").foregroundStyle(.white))
-                        .entranceEffect(SlideInEffect(), index: i)  // 逐行错峰
-                }
-            }
-            .padding(.horizontal, 16)
-        }
-    }
-}
