@@ -12,6 +12,7 @@ import ListEffectCore
 func applyEffectOutput(_ out: EffectOutput, to view: UIView) {
     let axis = out.rotationAxis ?? .z
     let perspective = out.perspective ?? (-1.0 / 800)
+    let anchor = out.anchor ?? .center
 
     if axis == .z {
         view.transform = CGAffineTransform(translationX: out.translation.x, y: out.translation.y)
@@ -29,9 +30,22 @@ func applyEffectOutput(_ out: EffectOutput, to view: UIView) {
         view.layer.transform = t
     }
     view.alpha = out.alpha
+    setAnchorPointPreservingFrame(CGPoint(x: anchor.x, y: anchor.y), on: view)
+}
 
-    if let anchor = out.anchor, anchor != .center {
-        view.layer.anchorPoint = CGPoint(x: anchor.x, y: anchor.y)
-    }
+func resetEffectOutput(on view: UIView) {
+    view.transform = .identity
+    view.layer.transform = CATransform3DIdentity
+    view.alpha = 1
+    setAnchorPointPreservingFrame(CGPoint(x: 0.5, y: 0.5), on: view)
+}
+
+private func setAnchorPointPreservingFrame(_ anchorPoint: CGPoint, on view: UIView) {
+    guard view.layer.anchorPoint != anchorPoint else { return }
+    let oldOrigin = view.frame.origin
+    view.layer.anchorPoint = anchorPoint
+    let newOrigin = view.frame.origin
+    view.layer.position.x -= newOrigin.x - oldOrigin.x
+    view.layer.position.y -= newOrigin.y - oldOrigin.y
 }
 #endif

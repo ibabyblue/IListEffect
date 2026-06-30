@@ -89,7 +89,20 @@ public extension View {
                         perRowDelay: TimeInterval = 0.05,
                         delayRowCap: Int = 12) -> some View {
         modifier(EntranceEffectModifier(effect: effect,
-                                        index: index,
+                                        identity: index.map(AnyHashable.init),
+                                        fallbackIndex: index,
+                                        fallbackPerRowDelay: perRowDelay,
+                                        fallbackDelayRowCap: delayRowCap))
+    }
+
+    /// 入场效果（稳定身份版）：同一个业务 id 只入场一次，不受插入/删除/重排导致的 index 变化影响。
+    func entranceEffect<ID: Hashable>(_ effect: EntranceEffect,
+                                      id: ID,
+                                      perRowDelay: TimeInterval = 0.05,
+                                      delayRowCap: Int = 12) -> some View {
+        modifier(EntranceEffectModifier(effect: effect,
+                                        identity: AnyHashable(id),
+                                        fallbackIndex: nil,
                                         fallbackPerRowDelay: perRowDelay,
                                         fallbackDelayRowCap: delayRowCap))
     }
@@ -109,7 +122,7 @@ func entranceRowIsVisible(rowMinY: CGFloat, rowMaxY: CGFloat, viewportHeight: CG
 final class EntranceCoordinator: ObservableObject {
     let perRowDelay: TimeInterval
     let delayRowCap: Int
-    private var entered = Set<Int>()
+    private var entered = Set<AnyHashable>()
     private var acceptingInitialBatch = true
     private var initialOrder = 0
 
@@ -118,13 +131,16 @@ final class EntranceCoordinator: ObservableObject {
         self.delayRowCap = delayRowCap
     }
 
-    func hasEntered(_ index: Int) -> Bool { entered.contains(index) }
+    func hasEntered(_ index: Int) -> Bool { hasEntered(id: index) }
+    func hasEntered<ID: Hashable>(id: ID) -> Bool { entered.contains(AnyHashable(id)) }
 
     /// 登记一次入场。已入场返回 nil（调用方应直接归位、不动画）；
     /// 否则标记入场并返回错峰延迟：首批按到达顺序错峰，滚动进入的为 0。
-    func registerEntrance(index: Int) -> TimeInterval? {
-        if entered.contains(index) { return nil }
-        entered.insert(index)
+    func registerEntrance(index: Int) -> TimeInterval? { registerEntrance(id: index) }
+    func registerEntrance<ID: Hashable>(id: ID) -> TimeInterval? {
+        let key = AnyHashable(id)
+        if entered.contains(key) { return nil }
+        entered.insert(key)
         guard acceptingInitialBatch else { return 0 }
         let delay = TimeInterval(min(initialOrder, delayRowCap)) * perRowDelay
         initialOrder += 1
@@ -133,6 +149,12 @@ final class EntranceCoordinator: ObservableObject {
 
     /// 首批窗口关闭后，新进入的 cell 不再错峰（delay=0）。
     func closeInitialBatch() { acceptingInitialBatch = false }
+
+    func resetEnteredState() {
+        entered.removeAll()
+        acceptingInitialBatch = true
+        initialOrder = 0
+    }
 }
 
 @available(iOS 17.0, macOS 14.0, *)
@@ -190,7 +212,8 @@ private struct ListEntranceContainerModifier: ViewModifier {
 @available(iOS 17.0, macOS 14.0, *)
 private struct EntranceEffectModifier: ViewModifier {
     let effect: EntranceEffect
-    let index: Int?
+    let identity: AnyHashable?
+    let fallbackIndex: Int?
     let fallbackPerRowDelay: TimeInterval
     let fallbackDelayRowCap: Int
 
@@ -200,18 +223,11 @@ private struct EntranceEffectModifier: ViewModifier {
     @State private var triggered = false
 
     func body(content: Content) -> some View {
-        let initial = effect.resolve(progress: 0)
-        let axis = initial.rotationAxis ?? .z
-        let anchor = UnitPoint(x: (initial.anchor ?? .center).x, y: (initial.anchor ?? .center).y)
         // 已入场过的 index（回滑重建）直接按归位渲染，避免重建瞬间闪一帧滑出态。
-        let alreadyEntered = index.flatMap { coordinator?.hasEntered($0) } ?? false
+        let alreadyEntered = identity.flatMap { coordinator?.hasEntered(id: $0) } ?? false
         let shown = appeared || alreadyEntered
         return content
-            .offset(x: shown ? 0 : initial.translation.x,
-                    y: shown ? 0 : initial.translation.y)
-            .scaleEffect(shown ? 1 : initial.scale, anchor: anchor)
-            .modifier(RotationModifier(radians: shown ? 0 : initial.rotation, axis: axis, anchor: anchor))
-            .opacity(shown ? 1 : initial.alpha)
+            .modifier(EntranceProgressModifier(effect: effect, progress: shown ? 1 : 0))
             .background(visibilityProbe)
             .onAppear {
                 // 无容器：退回 onAppear 一次性入场（无 latch，但已无回弹）。
@@ -238,24 +254,51 @@ private struct EntranceEffectModifier: ViewModifier {
 
     private func coordinatedTrigger() {
         guard !triggered else { return }
-        guard let c = coordinator, let idx = index else {
+        guard let c = coordinator, let key = identity else {
             fallbackTrigger()   // 有容器但无 index：退化为按实例一次
             return
         }
         triggered = true
-        if c.hasEntered(idx) {
+        if c.hasEntered(id: key) {
             appeared = true     // 已入场过：直接归位，不重播
             return
         }
-        let delay = c.registerEntrance(index: idx) ?? 0
-        withAnimation(.easeOut(duration: effect.duration).delay(delay)) { appeared = true }
+        let delay = c.registerEntrance(id: key) ?? 0
+        withAnimation(.linear(duration: effect.duration).delay(delay)) { appeared = true }
     }
 
     private func fallbackTrigger() {
         guard !triggered else { return }
         triggered = true
-        let delay = index.map { TimeInterval(min(max(0, $0), fallbackDelayRowCap)) * fallbackPerRowDelay } ?? 0
-        withAnimation(.easeOut(duration: effect.duration).delay(delay)) { appeared = true }
+        let delay = fallbackIndex.map { TimeInterval(min(max(0, $0), fallbackDelayRowCap)) * fallbackPerRowDelay } ?? 0
+        withAnimation(.linear(duration: effect.duration).delay(delay)) { appeared = true }
+    }
+}
+
+@available(iOS 17.0, macOS 14.0, *)
+func entranceOutput(for effect: EntranceEffect, progress: CGFloat) -> EffectOutput {
+    effect.resolve(progress: max(0, min(1, progress)))
+}
+
+@available(iOS 17.0, macOS 14.0, *)
+private struct EntranceProgressModifier: AnimatableModifier {
+    let effect: EntranceEffect
+    var progress: CGFloat
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func body(content: Content) -> some View {
+        let out = entranceOutput(for: effect, progress: progress)
+        let axis = out.rotationAxis ?? .z
+        let anchor = UnitPoint(x: (out.anchor ?? .center).x, y: (out.anchor ?? .center).y)
+        return content
+            .offset(x: out.translation.x, y: out.translation.y)
+            .scaleEffect(out.scale, anchor: anchor)
+            .modifier(RotationModifier(radians: out.rotation, axis: axis, anchor: anchor))
+            .opacity(out.alpha)
     }
 }
 #endif

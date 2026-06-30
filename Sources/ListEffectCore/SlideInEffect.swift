@@ -11,6 +11,8 @@ public struct SlideInEffect: EntranceEffect {
         /// 把线性 progress（0→1）映射为缓动后的 t（可能略超 1，用于回弹）。
         func apply(to progress: CGFloat) -> CGFloat {
             let t = max(0, min(1, progress))
+            if t <= 0 { return 0 }
+            if t >= 1 { return 1 }
             switch self {
             case .easeOut:
                 return 1 - pow(1 - t, 3)

@@ -68,5 +68,12 @@ final class PositionEffectDriverTests: XCTestCase {
         let cv = UICollectionView(frame: .zero, collectionViewLayout: UICollectionViewFlowLayout())
         XCTAssertTrue(cv.scrollEffect === cv.scrollEffect)
     }
+
+    func testApplyNowPublicRefreshEntryPointExists() {
+        let sv = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 480))
+        let driver = PositionEffectDriver(scrollView: sv)
+        driver.attach(RevealEffect(minScale: 0.8))
+        driver.applyNow()
+    }
 }
 #endif

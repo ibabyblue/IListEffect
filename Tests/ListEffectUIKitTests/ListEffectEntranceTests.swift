@@ -6,10 +6,7 @@ import ListEffectCore
 
 final class ListEffectEntranceTests: XCTestCase {
     private func makeCell() -> UICollectionViewCell {
-        let cv = UICollectionView(frame: CGRect(x: 0, y: 0, width: 320, height: 480),
-                                  collectionViewLayout: UICollectionViewFlowLayout())
-        cv.register(UICollectionViewCell.self, forCellWithReuseIdentifier: "c")
-        return cv.dequeueReusableCell(withReuseIdentifier: "c", for: IndexPath(item: 0, section: 0))
+        UICollectionViewCell(frame: CGRect(x: 0, y: 0, width: 320, height: 80))
     }
 
     func testAttachAndDetach() {
@@ -75,6 +72,48 @@ final class ListEffectEntranceTests: XCTestCase {
         entrance.handle(cell: cell, indexPath: ip)
         XCTAssertTrue(entrance.displayedIndexPaths.contains(ip))
         XCTAssertFalse(entrance.animating.isEmpty, "handle 后应标记动画中")
+    }
+
+    func testStableIDReanimatesWhenSameIndexPathRepresentsNewItem() {
+        let entrance = ListEffectEntrance()
+        entrance.attach(SlideInEffect(amplitude: 220, duration: 0.5, timing: .easeOut))
+        entrance.animateInitialBatch([])
+        let cell = makeCell()
+        let ip = IndexPath(item: 0, section: 0)
+
+        entrance.handle(cell: cell, id: "old", indexPath: ip)
+        entrance.handle(cell: cell, id: "new", indexPath: ip)
+
+        XCTAssertNotNil(entrance.animating[ObjectIdentifier(cell)], "同一 IndexPath 换成新稳定 ID 时应重新入场")
+    }
+
+    func testStableIDDoesNotReplayWhenSameItemMovesToDifferentIndexPath() {
+        let entrance = ListEffectEntrance()
+        entrance.attach(SlideInEffect(amplitude: 220, duration: 0.5, timing: .easeOut))
+        entrance.animateInitialBatch([])
+        let cell = makeCell()
+
+        entrance.handle(cell: cell, id: "item-1", indexPath: IndexPath(item: 0, section: 0))
+        entrance.handle(cell: cell, id: "item-1", indexPath: IndexPath(item: 5, section: 0))
+
+        XCTAssertEqual(cell.transform, .identity, "同一稳定 ID 移动到新 IndexPath 时不应重播")
+        XCTAssertNil(entrance.animating[ObjectIdentifier(cell)])
+    }
+
+    func testResetEnteredStateAllowsStableIDToAnimateAgain() {
+        let entrance = ListEffectEntrance()
+        entrance.attach(SlideInEffect(amplitude: 220, duration: 0.5, timing: .easeOut))
+        entrance.animateInitialBatch([])
+        let cell = makeCell()
+        let ip = IndexPath(item: 0, section: 0)
+
+        entrance.handle(cell: cell, id: "item-1", indexPath: ip)
+        entrance.handle(cell: cell, id: "item-1", indexPath: ip)
+        XCTAssertNil(entrance.animating[ObjectIdentifier(cell)])
+
+        entrance.resetEnteredState()
+        entrance.handle(cell: cell, id: "item-1", indexPath: ip)
+        XCTAssertNotNil(entrance.animating[ObjectIdentifier(cell)])
     }
 
     func testRedisplayDoesNotAnimate() {
@@ -212,9 +251,8 @@ final class ListEffectEntranceTests: XCTestCase {
         autoreleasepool {
             let cv = UICollectionView(frame: .zero, collectionViewLayout: UICollectionViewFlowLayout())
             cv.entrance.attach(SlideInEffect(amplitude: 220, duration: 0.5, timing: .easeOut))
-            cv.register(UICollectionViewCell.self, forCellWithReuseIdentifier: "c")
-            let cell = cv.dequeueReusableCell(withReuseIdentifier: "c", for: IndexPath(item: 0, section: 0))
-            cv.entrance.handle(cell: cell, indexPath: IndexPath(item: 0, section: 0))
+            let cell = UICollectionViewCell(frame: CGRect(x: 0, y: 0, width: 320, height: 80))
+            cv.entrance.animateInitialBatch([(view: cell, indexPath: IndexPath(item: 0, section: 0))])
             weakEntrance = cv.entrance
             XCTAssertNotNil(weakEntrance)
         }

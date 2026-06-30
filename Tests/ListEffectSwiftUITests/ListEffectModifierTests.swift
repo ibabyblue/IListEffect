@@ -38,6 +38,12 @@ final class ListEffectModifierTests: XCTestCase {
         _ = wrapped  // smoke：带 stagger index 的重载构造不崩溃
     }
 
+    func testEntranceEffectWithStableIDBuilds() throws {
+        guard #available(iOS 17.0, macOS 14.0, *) else { throw XCTSkip("需要 iOS 17 / macOS 14") }
+        let wrapped = AnyView(Text("row").entranceEffect(SlideInEffect(), id: "item-1"))
+        _ = wrapped
+    }
+
     func testListEntranceContainerBuilds() throws {
         guard #available(iOS 17.0, macOS 14.0, *) else { throw XCTSkip("需要 iOS 17 / macOS 14") }
         let wrapped = AnyView(
@@ -55,6 +61,23 @@ final class ListEffectModifierTests: XCTestCase {
         XCTAssertNotNil(c.registerEntrance(index: 0), "首次入场应返回延迟")
         XCTAssertTrue(c.hasEntered(0))
         XCTAssertNil(c.registerEntrance(index: 0), "再次入场应返回 nil（不重播）")
+    }
+
+    func testCoordinatorLatchesStableIdentityOnce() throws {
+        guard #available(iOS 17.0, macOS 14.0, *) else { throw XCTSkip("需要 iOS 17 / macOS 14") }
+        let c = EntranceCoordinator(perRowDelay: 0.05, delayRowCap: 12)
+        XCTAssertFalse(c.hasEntered(id: "item-1"))
+        XCTAssertNotNil(c.registerEntrance(id: "item-1"))
+        XCTAssertTrue(c.hasEntered(id: "item-1"))
+        XCTAssertNil(c.registerEntrance(id: "item-1"))
+    }
+
+    func testCoordinatorResetAllowsStableIdentityToEnterAgain() throws {
+        guard #available(iOS 17.0, macOS 14.0, *) else { throw XCTSkip("需要 iOS 17 / macOS 14") }
+        let c = EntranceCoordinator(perRowDelay: 0.05, delayRowCap: 12)
+        XCTAssertNotNil(c.registerEntrance(id: "item-1"))
+        c.resetEnteredState()
+        XCTAssertNotNil(c.registerEntrance(id: "item-1"))
     }
 
     func testCoordinatorStaggersInitialBatchByArrivalOrder() throws {
@@ -88,6 +111,19 @@ final class ListEffectModifierTests: XCTestCase {
         XCTAssertTrue(entranceRowIsVisible(rowMinY: 580, rowMaxY: 660, viewportHeight: 600), "顶部刚越过底边 → 可见")
         XCTAssertFalse(entranceRowIsVisible(rowMinY: 600, rowMaxY: 680, viewportHeight: 600), "完全在视口下方 → 不可见")
         XCTAssertFalse(entranceRowIsVisible(rowMinY: -120, rowMaxY: 0, viewportHeight: 600), "完全在视口上方 → 不可见")
+    }
+
+    func testEntranceOutputSamplesEffectProgress() throws {
+        guard #available(iOS 17.0, macOS 14.0, *) else { throw XCTSkip("需要 iOS 17 / macOS 14") }
+        struct VerticalEntrance: EntranceEffect {
+            var duration: TimeInterval { 0.5 }
+            func resolve(progress: CGFloat) -> EffectOutput {
+                EffectOutput(translation: CGPoint(x: 0, y: 100 * (1 - progress)), alpha: progress)
+            }
+        }
+        let out = entranceOutput(for: VerticalEntrance(), progress: 0.25)
+        XCTAssertEqual(out.translation.y, 75, accuracy: 0.001)
+        XCTAssertEqual(out.alpha, 0.25, accuracy: 0.001)
     }
 }
 #endif

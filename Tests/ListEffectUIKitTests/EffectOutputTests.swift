@@ -31,11 +31,21 @@ final class UIKitEffectOutputTests: XCTestCase {
         XCTAssertEqual(v.layer.anchorPoint, CGPoint(x: 0, y: 0))
     }
 
-    func testAnchorPointNotChangedAtCenter() {
+    func testAnchorPointRestoresToCenter() {
         let v = makeView()
         v.layer.anchorPoint = CGPoint(x: 0.3, y: 0.3)
         applyEffectOutput(EffectOutput(anchor: .center), to: v)
-        XCTAssertEqual(v.layer.anchorPoint, CGPoint(x: 0.3, y: 0.3), "center 不应改写已有 anchorPoint")
+        XCTAssertEqual(v.layer.anchorPoint, CGPoint(x: 0.5, y: 0.5), "center 应恢复默认 anchorPoint，避免复用时泄漏")
+    }
+
+    func testAnchorPointChangePreservesFrame() {
+        let v = makeView()
+        let frame = v.frame
+        applyEffectOutput(EffectOutput(anchor: AnchorPoint(x: 0, y: 0)), to: v)
+        XCTAssertEqual(v.frame.origin.x, frame.origin.x, accuracy: 0.001)
+        XCTAssertEqual(v.frame.origin.y, frame.origin.y, accuracy: 0.001)
+        XCTAssertEqual(v.frame.size.width, frame.size.width, accuracy: 0.001)
+        XCTAssertEqual(v.frame.size.height, frame.size.height, accuracy: 0.001)
     }
 
     /// 3D→2D 通道切换：2D 通道写 view.transform，其 setter 写入 CATransform3DMakeAffineTransform(仿射)，

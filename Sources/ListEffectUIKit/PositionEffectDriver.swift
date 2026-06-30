@@ -28,6 +28,11 @@ public final class PositionEffectDriver: NSObject {
         resetAll(in: sv)
     }
 
+    /// 主动刷新当前可见 cell。适用于 reload、bounds 变化、静止插入/删除后没有 contentOffset 变化的场景。
+    public func applyNow() {
+        apply()
+    }
+
     /// 归一化位置：居中 0，到/超视口边缘 ±1+。纯函数，可单测。
     static func normalizedPosition(cellCenter: CGFloat, viewportCenter: CGFloat, viewportHeight: CGFloat) -> CGFloat {
         guard viewportHeight > 0 else { return 0 }
@@ -83,9 +88,7 @@ public final class PositionEffectDriver: NSObject {
     }
 
     private func reset(_ v: UIView) {
-        v.transform = .identity
-        v.layer.transform = CATransform3DIdentity
-        v.alpha = 1
+        resetEffectOutput(on: v)
     }
 
     deinit { observation?.invalidate() }

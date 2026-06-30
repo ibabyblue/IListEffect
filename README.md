@@ -16,7 +16,7 @@ Three headline effects ship out of the box:
 ## Requirements
 
 - Swift 5.10+
-- iOS 15+ / macOS 12+
+- iOS 15+ / macOS 12+ for Core. `ListEffect-UIKit` is an iOS/UIKit product.
 - SwiftUI scroll effects require iOS 17+ / macOS 14+ (built on `.scrollTransition`).
 
 ## Installation (Swift Package Manager)
@@ -25,7 +25,7 @@ In `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/ibabyblue/IListEffect.git", from: "0.3.0")
+    .package(url: "https://github.com/ibabyblue/IListEffect.git", from: "0.3.1")
 ]
 ```
 
@@ -36,8 +36,8 @@ Depend on whichever products you need:
 | Product | Module | Purpose |
 |---------|------|------|
 | `ListEffect-Core` | `ListEffectCore` | Pure effect logic (no UI dependencies) |
-| `ListEffect-UIKit` | `ListEffectUIKit` | UIKit adapter (depends on Core) |
-| `ListEffect-SwiftUI` | `ListEffectSwiftUI` | SwiftUI adapter (depends on Core) |
+| `ListEffect-UIKit` | `ListEffectUIKit` | iOS/UIKit adapter (depends on Core) |
+| `ListEffect-SwiftUI` | `ListEffectSwiftUI` | SwiftUI adapter (depends on Core; scroll APIs require iOS 17+ / macOS 14+) |
 
 ## Usage
 
@@ -78,6 +78,18 @@ func tableView(_ tv: UITableView, willDisplay cell: UITableViewCell, forRowAt i:
 }
 ```
 
+For mutable lists, prefer a stable business identity so inserts, deletes, and reordering do not make a new row inherit an old row's "already shown" state:
+
+```swift
+func tableView(_ tv: UITableView, willDisplay cell: UITableViewCell, forRowAt i: IndexPath) {
+    let item = items[i.row]
+    tv.entrance.handle(cell: cell, id: item.id, indexPath: i)
+}
+
+// When replacing the whole data source and intentionally replaying entrance:
+tableView.entrance.resetEnteredState()
+```
+
 Optional optimization — `prepare(cell:)` pre-sets the initial state on dequeue to eliminate edge flicker during very fast scrolling. It is now optional: `handle` also seeds the initial state, so skipping `prepare` no longer flickers:
 
 ```swift
@@ -88,7 +100,7 @@ func tableView(_ tv: UITableView, cellForRowAt i: IndexPath) -> UITableViewCell 
 }
 ```
 
-> ⚠️ The entrance animation takes over the cell's `contentView.transform` / `alpha`. Do not apply a custom transform to the same cell concurrently.
+> ⚠️ The UIKit adapters apply transforms and alpha to the cell itself, not `contentView`. Do not apply another transform/alpha animation to the same cell concurrently.
 
 ### UIKit · Position-based effects (Reveal, custom)
 
@@ -101,12 +113,15 @@ tableView.scrollEffect.attach(RevealEffect(minScale: 0.8))
 
 Detach with `tableView.scrollEffect.detach()`.
 
+If visible cells change without a scroll event (for example after `reloadData()`, rotation, or stationary insert/delete), call `tableView.scrollEffect.applyNow()` after layout to refresh the current visible cells.
+
 ### SwiftUI (iOS 17+)
 
 Two row modifiers, mirroring the UIKit entries, plus one container modifier for entrance:
 
 - `.listEffect(_:)` — position-based, scroll-linked (built on `.scrollTransition`, apply per row). Honors `rotationAxis` / `anchor`.
-- `.entranceEffect(_:index:)` — one-shot entrance, played the first time a row actually enters the viewport. Pass `index:` — it is both the per-row stagger key and the "enter once" latch key.
+- `.entranceEffect(_:id:)` — one-shot entrance keyed by a stable business identity; recommended for mutable lists.
+- `.entranceEffect(_:index:)` — compatibility overload keyed by index; use only for static lists.
 - `.listEntrance()` — **container** modifier on the `ScrollView`. Installs a shared coordinator + real-visibility tracking so each row enters exactly once and never replays on scroll-back.
 
 > **Note:** SwiftUI entrance is currently **experimental**. The demo has it disabled (uses scroll-linked Reveal instead) while we refine the experience. The APIs remain available; feel free to enable and tune (`perRowDelay`/`delayRowCap`) for your use case.
@@ -120,10 +135,10 @@ import ListEffectCore
 
 ScrollView {
     LazyVStack {
-        ForEach(Array(items.enumerated()), id: \.offset) { i, item in
+        ForEach(items) { item in
             RowView(item)
                 // Entrance (experimental):
-                // .entranceEffect(SlideInEffect(), index: i)
+                // .entranceEffect(SlideInEffect(), id: item.id)
                 // Position-based (stable):
                 .listEffect(RevealEffect(minScale: 0.8))
         }
@@ -137,7 +152,7 @@ ScrollView {
 | Effect | UIKit | SwiftUI | Notes |
 |------|:---:|:---:|------|
 | `SpringyCollectionLayout` | ✅ Collection | — | Real UIDynamics springs with inertial bounce |
-| `SlideInEffect` | ✅ Table / Collection | ✅ | Entrance; slides in from the right on first appearance, no re-animate on scroll-back (SwiftUI requires `.listEntrance()` on the ScrollView). Default timing is `easeOut` (no overshoot/bounce); pass `.easeOutBack` / `.spring` explicitly to opt into a rebound. |
+| `SlideInEffect` | ✅ Table / Collection | ✅ | Entrance; slides in from the right on first appearance, no re-animate on scroll-back (SwiftUI requires `.listEntrance()` on the ScrollView). Prefer stable `id:` keys for mutable lists. Default timing is `easeOut` (no overshoot/bounce); pass `.easeOutBack` / `.spring` explicitly to opt into a rebound. |
 | `RevealEffect` | ✅ Table / Collection | ✅ | Position; scale + fade in as cells enter the viewport |
 
 Entry points:
@@ -146,7 +161,7 @@ Entry points:
 |------|------|------|------|
 | `scrollView.entrance` | UIKit | `EntranceEffect` | `ListEffectEntrance` (CADisplayLink per-frame sampling; timing now in effect) |
 | `scrollView.scrollEffect` | UIKit | `PositionEffect` | `PositionEffectDriver` (KVO on `contentOffset`) |
-| `.entranceEffect(_:index:)` | SwiftUI | `EntranceEffect` | one-shot, real-visibility driven (+ `.listEntrance()` container for enter-once latch) |
+| `.entranceEffect(_:id:)` / `.entranceEffect(_:index:)` | SwiftUI | `EntranceEffect` | one-shot, real-visibility driven (+ `.listEntrance()` container for enter-once latch) |
 | `.listEffect(_:)` | SwiftUI | `PositionEffect` | `.scrollTransition` |
 
 `SlideInEffect` conforms to `EntranceEffect`; `RevealEffect` conforms to `PositionEffect`. Both effect families share the same `EffectOutput` fields.

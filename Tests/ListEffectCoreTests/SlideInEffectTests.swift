@@ -68,6 +68,13 @@ final class SlideInEffectTests: XCTestCase {
         XCTAssertEqual(t.apply(to: 1), 1, accuracy: 0.05, "spring 在 progress=1 应收敛到 1")
     }
 
+    func testSpringResolveCompletesExactlyAtIdentity() {
+        let e = SlideInEffect(amplitude: 220, duration: 0.5, timing: .spring(damping: 0.5, frequency: 1.0))
+        let out = e.resolve(progress: 1)
+        XCTAssertEqual(out.translation.x, 0, accuracy: 0.001, "spring 完成帧必须精确归位，避免驱动器移除动画后残留偏移")
+        XCTAssertEqual(out.alpha, 1, accuracy: 0.001)
+    }
+
     func testSpringOvershoots() {
         let t = SlideInEffect.Timing.spring(damping: 0.3, frequency: 1.2)
         // 中段应存在回弹（>1）

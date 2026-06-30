@@ -16,6 +16,7 @@ public final class ListEffectEntrance {
 
     var effect: EntranceEffect?
     var displayedIndexPaths = Set<IndexPath>()
+    var displayedIDs = Set<AnyHashable>()
     var initialBatchTriggered = false
 
     struct Animation {
@@ -58,24 +59,36 @@ public final class ListEffectEntrance {
         displayLink = nil
         for anim in animating.values { reset(anim.view) }
         animating.removeAll()
-        displayedIndexPaths.removeAll()
+        resetEnteredState()
         initialBatchTriggered = false
+    }
+
+    /// 清空“已入场”状态。适用于数据源整体替换、重新加载后希望重新播放入场动画的场景。
+    public func resetEnteredState() {
+        displayedIndexPaths.removeAll()
+        displayedIDs.removeAll()
     }
 
     /// 首批入场：对可见 cell 从上到下错开延迟动画。幂等，仅首次生效。
     /// - Parameter cells: 传 nil 则从绑定的 scrollView 取 visibleCells；测试可显式传入。
     public func animateInitialBatch(_ cells: [(view: UIView, indexPath: IndexPath)]? = nil) {
+        animateInitialBatch(identified: cells?.map { (view: $0.view, id: AnyHashable($0.indexPath), indexPath: $0.indexPath) })
+    }
+
+    /// 首批入场（稳定身份版）：同一个业务 id 只入场一次，不受插入/删除/重排导致的 indexPath 变化影响。
+    public func animateInitialBatch(identified cells: [(view: UIView, id: AnyHashable, indexPath: IndexPath)]?) {
         guard !initialBatchTriggered, let effect = effect else { return }
         initialBatchTriggered = true
-        let pairs = cells ?? visibleCellPairs() ?? []
+        let pairs = cells ?? visibleCellPairs()?.map { (view: $0.view, id: AnyHashable($0.indexPath), indexPath: $0.indexPath) } ?? []
         let sorted = pairs.sorted { lhs, rhs in
             let l = lhs.indexPath.section * 100_000 + lhs.indexPath.item
             let r = rhs.indexPath.section * 100_000 + rhs.indexPath.item
             return l < r
         }
         for (row, pair) in sorted.enumerated() {
-            if displayedIndexPaths.contains(pair.indexPath) { continue }
+            if displayedIDs.contains(pair.id) { continue }
             displayedIndexPaths.insert(pair.indexPath)
+            displayedIDs.insert(pair.id)
             let id = ObjectIdentifier(pair.view)
             animating.removeValue(forKey: id)
             applyEffectOutput(effect.resolve(progress: 0), to: pair.view)
@@ -110,6 +123,12 @@ public final class ListEffectEntrance {
     public func handle(cell: UICollectionViewCell, indexPath: IndexPath, delay: TimeInterval = 0) {
         handle(view: cell, indexPath: indexPath, delay: delay)
     }
+    public func handle(cell: UITableViewCell, id: AnyHashable, indexPath: IndexPath, delay: TimeInterval = 0) {
+        handle(view: cell, id: id, indexPath: indexPath, delay: delay)
+    }
+    public func handle(cell: UICollectionViewCell, id: AnyHashable, indexPath: IndexPath, delay: TimeInterval = 0) {
+        handle(view: cell, id: id, indexPath: indexPath, delay: delay)
+    }
 
     public func prepare(cell: UITableViewCell) { prepare(view: cell) }
     public func prepare(cell: UICollectionViewCell) { prepare(view: cell) }
@@ -119,15 +138,20 @@ public final class ListEffectEntrance {
     }
 
     private func handle(view: UIView, indexPath: IndexPath, delay: TimeInterval) {
+        handle(view: view, id: AnyHashable(indexPath), indexPath: indexPath, delay: delay)
+    }
+
+    private func handle(view: UIView, id stableID: AnyHashable, indexPath: IndexPath, delay: TimeInterval) {
         guard let effect = effect else { return }
         if !initialBatchTriggered { return }  // 首批由 animateInitialBatch 统一处理
         let id = ObjectIdentifier(view)
-        if displayedIndexPaths.contains(indexPath) {
+        if displayedIDs.contains(stableID) {
             animating.removeValue(forKey: id)
             reset(view)
             return
         }
         displayedIndexPaths.insert(indexPath)
+        displayedIDs.insert(stableID)
         animating.removeValue(forKey: id)  // cell 复用：清旧条目
         // 兜底：handle 启动即设初始态，漏调 prepare 也不闪
         applyEffectOutput(effect.resolve(progress: 0), to: view)
@@ -148,9 +172,7 @@ public final class ListEffectEntrance {
     }
 
     private func reset(_ v: UIView) {
-        v.transform = .identity
-        v.layer.transform = CATransform3DIdentity
-        v.alpha = 1
+        resetEffectOutput(on: v)
     }
 
     deinit { displayLink?.invalidate() }
