@@ -2,13 +2,15 @@
 import UIKit
 import ListEffectCore
 
-/// 把 EffectOutput 应用到 UIView：
-/// - axis==.z（含默认 nil）：2D，走 view.transform（rotated+scaled+translated）
-/// - 其他轴：3D，走 layer.transform + 透视，清空 view.transform
-/// - anchor != center：设 layer.anchorPoint（注意 CALayer 会相应平移 frame，调用方需自行补偿）
+/// Applies a platform-independent effect output to a UIKit view.
 ///
-/// 注意：UIView.transform 的底层就是 layer.transform 的仿射投影，二者共享存储。
-/// 因此 2D 通道只写 view.transform、不显式清 layer.transform；3D 通道先清 view.transform 再写 layer.transform。
+/// Z-axis rotations use the view's affine transform. Other axes use the layer's
+/// three-dimensional transform and perspective. Anchor-point changes preserve
+/// the view's frame.
+///
+/// - Parameters:
+///   - out: The effect values to apply.
+///   - view: The view that receives the transform and opacity values.
 func applyEffectOutput(_ out: EffectOutput, to view: UIView) {
     let axis = out.rotationAxis ?? .z
     let perspective = out.perspective ?? (-1.0 / 800)
@@ -33,6 +35,9 @@ func applyEffectOutput(_ out: EffectOutput, to view: UIView) {
     setAnchorPointPreservingFrame(CGPoint(x: anchor.x, y: anchor.y), on: view)
 }
 
+/// Restores a view to the identity transform, full opacity, and center anchor.
+///
+/// - Parameter view: The view to reset.
 func resetEffectOutput(on view: UIView) {
     view.transform = .identity
     view.layer.transform = CATransform3DIdentity
@@ -40,6 +45,11 @@ func resetEffectOutput(on view: UIView) {
     setAnchorPointPreservingFrame(CGPoint(x: 0.5, y: 0.5), on: view)
 }
 
+/// Changes a layer anchor point without changing the view's frame.
+///
+/// - Parameters:
+///   - anchorPoint: The normalized layer anchor point.
+///   - view: The view whose layer anchor point changes.
 private func setAnchorPointPreservingFrame(_ anchorPoint: CGPoint, on view: UIView) {
     guard view.layer.anchorPoint != anchorPoint else { return }
     let oldOrigin = view.frame.origin

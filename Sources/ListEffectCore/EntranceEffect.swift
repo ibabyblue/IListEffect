@@ -1,11 +1,19 @@
 import CoreGraphics
 import Foundation
 
-/// 入场型效果：cell 首次出现时由 progress(0→1) 驱动的一次性动画。
-/// 与 PositionEffect 对称——纯函数，无 UIKit 依赖。
+/// A one-shot entrance effect driven by normalized progress.
+///
+/// Implementations are platform-independent value resolvers. UIKit and SwiftUI
+/// integrations own the animation lifecycle and apply the resulting
+/// ``EffectOutput`` values.
 public protocol EntranceEffect {
-    /// 单个 cell 动画时长（秒），驱动器据此推进 progress。
+    /// The duration of one item animation, measured in seconds.
     var duration: TimeInterval { get }
-    /// progress: 0 = 初始未到位，1 = 归位完成。
+
+    /// Resolves the visual values for an entrance-animation progress value.
+    ///
+    /// - Parameter progress: Normalized progress, where `0` is the initial state
+    ///   and `1` is the settled state.
+    /// - Returns: The visual values to apply at the supplied progress.
     func resolve(progress: CGFloat) -> EffectOutput
 }

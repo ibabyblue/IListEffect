@@ -2,10 +2,12 @@ import SwiftUI
 import ListEffectSwiftUI
 import ListEffectCore
 
-/// SwiftUI · Reveal：位置型 scroll-linked 缩放淡入。
+/// Demonstrates the SwiftUI scroll-linked reveal modifier.
 struct SwiftUIDemoView: View {
+    /// The repeating colors used by example rows.
     private let colors: [Color] = [.red, .orange, .green, .blue, .purple]
 
+    /// The scrollable SwiftUI reveal catalog.
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 12) {
@@ -21,4 +23,3 @@ struct SwiftUIDemoView: View {
         }
     }
 }
-

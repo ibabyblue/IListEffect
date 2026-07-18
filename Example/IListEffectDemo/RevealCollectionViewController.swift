@@ -2,11 +2,14 @@ import UIKit
 import ListEffectUIKit
 import ListEffectCore
 
-/// Reveal：cell 随滚动位置缩放/淡入。使用库的 PositionEffectDriver（scroll-linked）。
+/// Demonstrates a UIKit scroll-linked reveal through `PositionEffectDriver`.
 final class RevealCollectionViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
+    /// The collection view whose visible cells receive the reveal effect.
     private var collectionView: UICollectionView!
+    /// The repeating colors used by example cells.
     private let colors: [UIColor] = [.systemTeal, .systemPink, .systemIndigo, .systemYellow]
 
+    /// Builds the collection view and attaches its reveal effect.
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Reveal"
@@ -23,7 +26,20 @@ final class RevealCollectionViewController: UIViewController, UICollectionViewDa
         collectionView.scrollEffect.attach(RevealEffect(minScale: 0.8))
     }
 
+    /// Returns the number of sample items.
+    ///
+    /// - Parameters:
+    ///   - cv: The collection view requesting the count.
+    ///   - s: The requested section.
+    /// - Returns: The fixed sample count.
     func collectionView(_ cv: UICollectionView, numberOfItemsInSection s: Int) -> Int { 50 }
+
+    /// Dequeues and configures a sample cell.
+    ///
+    /// - Parameters:
+    ///   - cv: The collection view requesting the cell.
+    ///   - i: The cell's index path.
+    /// - Returns: A colored sample cell.
     func collectionView(_ cv: UICollectionView, cellForItemAt i: IndexPath) -> UICollectionViewCell {
         let cell = cv.dequeueReusableCell(withReuseIdentifier: "c", for: i)
         cell.contentView.backgroundColor = colors[i.item % colors.count]

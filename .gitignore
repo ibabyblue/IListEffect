@@ -2,7 +2,9 @@
 .build/
 .swiftpm/
 DerivedData/
-*.xcodeproj
 xcuserdata/
-demo/build/
+*.xcuserstate
+**/xcshareddata/IDEWorkspaceChecks.plist
+Example/build/
 docs/
+/AGENTS.md

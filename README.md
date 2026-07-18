@@ -25,7 +25,7 @@ In `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/ibabyblue/IListEffect.git", from: "0.3.1")
+    .package(url: "https://github.com/ibabyblue/IListEffect.git", from: "0.4.0")
 ]
 ```
 
@@ -38,6 +38,15 @@ Depend on whichever products you need:
 | `ListEffect-Core` | `ListEffectCore` | Pure effect logic (no UI dependencies) |
 | `ListEffect-UIKit` | `ListEffectUIKit` | iOS/UIKit adapter (depends on Core) |
 | `ListEffect-SwiftUI` | `ListEffectSwiftUI` | SwiftUI adapter (depends on Core; scroll APIs require iOS 17+ / macOS 14+) |
+
+## Documentation
+
+- [Core documentation](Sources/ListEffectCore/ListEffectCore.docc/ListEffectCore.md) — effect contracts, output values, built-in effects, and custom-effect authoring.
+- [UIKit documentation](Sources/ListEffectUIKit/ListEffectUIKit.docc/ListEffectUIKit.md) — entrance, position, and spring-layout integrations.
+- [SwiftUI documentation](Sources/ListEffectSwiftUI/ListEffectSwiftUI.docc/ListEffectSwiftUI.md) — scroll-linked and coordinated entrance modifiers.
+- [Example application](Example/README.md) — runnable UIKit and SwiftUI scenarios with build and test commands.
+
+Open the package in Xcode and choose **Product → Build Documentation** to browse the generated symbol reference alongside these guides.
 
 ## Usage
 
@@ -124,7 +133,7 @@ Two row modifiers, mirroring the UIKit entries, plus one container modifier for 
 - `.entranceEffect(_:index:)` — compatibility overload keyed by index; use only for static lists.
 - `.listEntrance()` — **container** modifier on the `ScrollView`. Installs a shared coordinator + real-visibility tracking so each row enters exactly once and never replays on scroll-back.
 
-> **Note:** SwiftUI entrance is currently **experimental**. The demo has it disabled (uses scroll-linked Reveal instead) while we refine the experience. The APIs remain available; feel free to enable and tune (`perRowDelay`/`delayRowCap`) for your use case.
+> **Note:** SwiftUI entrance is currently **experimental**. The Example has it disabled (uses scroll-linked Reveal instead) while we refine the experience. The APIs remain available; feel free to enable and tune (`perRowDelay`/`delayRowCap`) for your use case.
 
 Why the container: a bare `.onAppear` entrance in a `LazyVStack` fires in the off-screen render buffer, so the animation often finishes before the row is actually visible — some rows appear pre-settled, others animate, and the list looks fragmented. `.listEntrance()` drives the entrance from real scroll geometry instead of `onAppear` timing, so every row that scrolls in slides in consistently (no fragmentation), the first screen still staggers top-to-bottom, and rows scrolled back into view do **not** replay — matching UIKit's "show once" semantics.
 
@@ -213,6 +222,24 @@ struct TiltEffect: PositionEffect {
 ```
 
 For `PositionEffect`, `position` is the normalized in-viewport position (-1 top outside … 0 centered … 1 bottom outside). For `EntranceEffect`, `progress` is the entrance progress (0 initial … 1 settled).
+
+## Example Application
+
+The checked-in [Example](Example/README.md) is an XcodeGen-backed iOS integration catalog with four tabs:
+
+- Springy collection layout.
+- UIKit slide-in entrance.
+- UIKit scroll-linked reveal.
+- SwiftUI scroll-linked reveal.
+
+Generate and open the project with:
+
+```bash
+xcodegen generate --spec Example/project.yml --project Example
+open Example/IListEffectDemo.xcodeproj
+```
+
+`Example/project.yml` is the project source of truth; the generated Xcode project is committed so consumers can run the catalog immediately.
 
 ## Architecture
 

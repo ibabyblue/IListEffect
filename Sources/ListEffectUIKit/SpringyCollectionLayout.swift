@@ -1,28 +1,41 @@
 #if canImport(UIKit)
 import UIKit
 
-/// UICollectionView 专属的弹性布局：基于 UIDynamics 真实弹簧（带惯性回弹），
-/// 复刻"跟手滞后 + 回弹波浪"的手感。仅适用于 UICollectionView（UITableView 无可注入的 layout）。
+/// A collection-view flow layout that adds inertial, spring-like movement to cells.
+///
+/// The layout uses UIKit Dynamics to create a trailing wave while the user
+/// scrolls. It is specific to `UICollectionView` because table views do not
+/// expose a replaceable layout object.
 public final class SpringyCollectionLayout: UICollectionViewFlowLayout {
 
-    /// 阻尼：越小回弹越久越"果冻"。
+    /// The spring damping ratio. Smaller values produce longer oscillation.
     public var springDamping: CGFloat = 0.8
-    /// 频率：越大越"硬/快"。
+    /// The spring oscillation frequency. Larger values feel faster and stiffer.
     public var springFrequency: CGFloat = 1.1
-    /// 滚动阻力分母：越小跟手越"拖沓"、波浪越明显。
+    /// The denominator used to calculate scroll resistance.
+    ///
+    /// Smaller values create more displacement and a more pronounced wave.
     public var scrollResistanceFactor: CGFloat = 1500
 
+    /// The dynamic animator that owns cell attachment behaviors.
     private lazy var animator = UIDynamicAnimator(collectionViewLayout: self)
+    /// The index paths currently represented by dynamic behaviors.
     private var visibleIndexPaths = Set<IndexPath>()
+    /// The most recent vertical bounds delta.
     private var latestDelta: CGFloat = 0
 
+    /// Creates a vertically scrolling springy flow layout with default spacing.
     public override init() {
         super.init()
         minimumLineSpacing = 12
         scrollDirection = .vertical
     }
+    /// Creates the layout from an archive.
+    ///
+    /// - Parameter coder: The decoder containing archived layout state.
     public required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
+    /// Updates dynamic behaviors for items around the visible viewport.
     public override func prepare() {
         super.prepare()
         guard let cv = collectionView else { return }
@@ -57,14 +70,26 @@ public final class SpringyCollectionLayout: UICollectionViewFlowLayout {
         }
     }
 
+    /// Returns dynamic layout attributes for items intersecting a rectangle.
+    ///
+    /// - Parameter rect: The rectangle to query in collection-view coordinates.
+    /// - Returns: The dynamic attributes managed by the animator.
     public override func layoutAttributesForElements(in rect: CGRect) -> [UICollectionViewLayoutAttributes]? {
         animator.items(in: rect) as? [UICollectionViewLayoutAttributes]
     }
 
+    /// Returns dynamic layout attributes for a specific item.
+    ///
+    /// - Parameter indexPath: The index path of the requested item.
+    /// - Returns: The animator's current attributes for the item.
     public override func layoutAttributesForItem(at indexPath: IndexPath) -> UICollectionViewLayoutAttributes? {
         animator.layoutAttributesForCell(at: indexPath)
     }
 
+    /// Offsets dynamic items in response to a collection-view bounds change.
+    ///
+    /// - Parameter newBounds: The collection view's proposed bounds.
+    /// - Returns: `false` because the animator is updated directly.
     public override func shouldInvalidateLayout(forBoundsChange newBounds: CGRect) -> Bool {
         guard let cv = collectionView else { return false }
         latestDelta = newBounds.origin.y - cv.bounds.origin.y

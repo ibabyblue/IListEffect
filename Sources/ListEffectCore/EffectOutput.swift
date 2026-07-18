@@ -1,39 +1,77 @@
 import CoreGraphics
 
-/// 3D 旋转轴。平台无关（纯 CGFloat），Core 不依赖 UIKit/SwiftUI。
+/// A platform-independent axis used to rotate an effect in three dimensions.
 public struct RotationAxis: Equatable {
+    /// The x component of the axis vector.
     public var x: CGFloat
+    /// The y component of the axis vector.
     public var y: CGFloat
+    /// The z component of the axis vector.
     public var z: CGFloat
+
+    /// Creates a rotation axis from its vector components.
+    ///
+    /// - Parameters:
+    ///   - x: The x component of the axis vector.
+    ///   - y: The y component of the axis vector.
+    ///   - z: The z component of the axis vector.
     public init(x: CGFloat, y: CGFloat, z: CGFloat) { self.x = x; self.y = y; self.z = z }
-    /// 绕 Z 轴：2D 平面旋转（默认）。
+
+    /// The z axis, which produces a two-dimensional rotation in the view plane.
     public static let z = RotationAxis(x: 0, y: 0, z: 1)
-    /// 绕 X 轴：3D 倾斜。
+
+    /// The x axis, which produces a three-dimensional tilt around the horizontal axis.
     public static let x = RotationAxis(x: 1, y: 0, z: 0)
 }
 
-/// 旋转/缩放锚点，归一化 0…1（平台无关）。
+/// A platform-independent, normalized anchor point for rotation and scaling.
 public struct AnchorPoint: Equatable {
+    /// The horizontal coordinate, where `0` is the leading edge and `1` is the trailing edge.
     public var x: CGFloat
+    /// The vertical coordinate, where `0` is the top edge and `1` is the bottom edge.
     public var y: CGFloat
+
+    /// Creates an anchor point.
+    ///
+    /// - Parameters:
+    ///   - x: The normalized horizontal coordinate.
+    ///   - y: The normalized vertical coordinate.
     public init(x: CGFloat = 0.5, y: CGFloat = 0.5) { self.x = x; self.y = y }
+
+    /// The center anchor point at `(0.5, 0.5)`.
     public static let center = AnchorPoint()
 }
 
-/// 效果的输出，UIKit 与 SwiftUI 两端共用。
+/// A platform-independent snapshot of the visual values produced by an effect.
+///
+/// UIKit and SwiftUI integrations translate the same output into their native
+/// transform and opacity APIs.
 public struct EffectOutput: Equatable {
+    /// The horizontal and vertical translation, measured in points.
     public var translation: CGPoint
+    /// The uniform scale factor.
     public var scale: CGFloat
-    /// 旋转弧度。
+    /// The rotation angle, measured in radians.
     public var rotation: CGFloat
+    /// The opacity value, where `0` is transparent and `1` is opaque.
     public var alpha: CGFloat
-    /// 旋转轴；nil → 默认绕 Z（2D）。
+    /// The rotation axis, or `nil` to use ``RotationAxis/z-type.property``.
     public var rotationAxis: RotationAxis?
-    /// 3D 透视（m34）；nil → 默认 -1/800。
+    /// The Core Animation `m34` perspective value, or `nil` to use `-1/800`.
     public var perspective: CGFloat?
-    /// 旋转/缩放锚点；nil → 默认中心。
+    /// The rotation and scale anchor, or `nil` to use ``AnchorPoint/center``.
     public var anchor: AnchorPoint?
 
+    /// Creates a visual effect output.
+    ///
+    /// - Parameters:
+    ///   - translation: The translation in points.
+    ///   - scale: The uniform scale factor.
+    ///   - rotation: The rotation angle in radians.
+    ///   - alpha: The opacity value.
+    ///   - rotationAxis: The optional three-dimensional rotation axis.
+    ///   - perspective: The optional Core Animation `m34` perspective value.
+    ///   - anchor: The optional normalized transform anchor.
     public init(translation: CGPoint = .zero,
                 scale: CGFloat = 1,
                 rotation: CGFloat = 0,
